@@ -30,4 +30,28 @@ Provide a concise summary."""
         "research_results": results,
         "next_route": "browser",
         "messages": [AIMessage(content=f"[Research] Query: {query}\n{summary_response.content}")],
+        "activity_events": [
+            {
+                "step": "research",
+                "kind": "step_start",
+                "title": "Pesquisando na web",
+                "summary": query,
+                "preview_type": "text",
+                "preview_data": {"content": query},
+            },
+            {
+                "step": "research",
+                "kind": "preview",
+                "title": "Resultados da pesquisa",
+                "summary": summary_response.content[:200],
+                "preview_type": "search_results",
+                "preview_data": {
+                    "query": query,
+                    "results": [
+                        {"title": item.get("title", ""), "url": item.get("url", "")}
+                        for item in results[:5]
+                    ],
+                },
+            },
+        ],
     }

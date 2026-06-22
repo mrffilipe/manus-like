@@ -21,4 +21,14 @@ async def human_input_node(state: AgentState, ctx: NodeContext) -> dict:
         "needs_human": False,
         "status": "Running",
         "next_route": "planner",
+        "activity_events": [
+            {
+                "step": "human_input",
+                "kind": "step_done",
+                "title": "Resposta recebida",
+                "summary": str(human_response)[:200],
+                "preview_type": "text",
+                "preview_data": {"content": str(human_response)},
+            }
+        ],
     }

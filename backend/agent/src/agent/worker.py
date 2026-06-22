@@ -35,15 +35,16 @@ async def process_job(runner: GraphRunner, queue: RedisQueue, job: AgentJob) -> 
                 return
 
             if job.job_type == JobType.RUN:
-                await runner.run(repo, execution_id, execution.goal)
+                await runner.run(repo, execution_id, execution.goal, queue=queue)
             elif job.job_type == JobType.RESUME:
-                await runner.run(repo, execution_id, execution.goal, resume=True)
+                await runner.run(repo, execution_id, execution.goal, resume=True, queue=queue)
             elif job.job_type == JobType.CONTINUE:
                 await runner.run(
                     repo,
                     execution_id,
                     execution.goal,
                     human_response=job.human_response,
+                    queue=queue,
                 )
 
             await queue.publish_event(job.execution_id, {"event": "completed"})

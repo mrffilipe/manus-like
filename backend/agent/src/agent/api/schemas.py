@@ -1,7 +1,8 @@
 """Pydantic schemas for API."""
 
 import uuid
-from typing import Literal
+from datetime import datetime
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
@@ -30,3 +31,20 @@ class AgentStatusResponse(BaseModel):
     options: list[str] | None = None
     error_message: str | None = None
     result: str | None = None
+
+
+class ActivityEventResponse(BaseModel):
+    id: uuid.UUID
+    execution_id: uuid.UUID
+    step: str
+    kind: Literal["step_start", "step_done", "preview", "error"]
+    title: str
+    summary: str | None = None
+    preview_type: Literal["text", "markdown", "search_results", "webpage", "screenshot"] | None = None
+    preview_data: dict[str, Any] | None = None
+    created_at: datetime
+
+
+class ActivityListResponse(BaseModel):
+    execution_id: uuid.UUID
+    activities: list[ActivityEventResponse]

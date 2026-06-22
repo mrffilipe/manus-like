@@ -41,9 +41,25 @@ Use tools if needed, otherwise provide a working summary."""
     else:
         content = response.content
 
+    preview_content = content
+    if tool_outputs:
+        summaries = [item["result"] for item in tool_outputs if item.get("result")]
+        if summaries:
+            preview_content = "\n\n".join(summaries)
+
     return {
         "current_step": "tool_execution",
         "tool_calls": tool_outputs,
         "next_route": "memory",
         "messages": [AIMessage(content=f"[Tools] {content}")],
+        "activity_events": [
+            {
+                "step": "tool_execution",
+                "kind": "step_done",
+                "title": "Ferramentas executadas",
+                "summary": None,
+                "preview_type": "markdown",
+                "preview_data": {"content": preview_content[:3000]},
+            }
+        ],
     }

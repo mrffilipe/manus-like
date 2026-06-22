@@ -41,4 +41,14 @@ Respond with a short plan and end with NEXT_ACTION: <action> where action is one
         "next_route": next_action,
         "iteration": state.get("iteration", 0) + 1,
         "messages": [AIMessage(content=f"[Planner] {plan}")],
+        "activity_events": [
+            {
+                "step": "planner",
+                "kind": "step_done",
+                "title": "Planejamento concluído",
+                "summary": None,
+                "preview_type": "markdown",
+                "preview_data": {"content": plan[:3000]},
+            }
+        ],
     }

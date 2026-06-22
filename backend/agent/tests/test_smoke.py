@@ -64,6 +64,7 @@ async def test_agent_state_structure():
         needs_human=False,
         human_response=None,
         result=None,
+        activity_events=[],
     )
     assert state["goal"] == "test"
     assert state["status"] == "Running"
@@ -190,3 +191,29 @@ async def test_continue_requires_waiting_status(fake_queue):
 
     app.dependency_overrides.clear()
     assert response.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_agent_activity_list():
+    mock_execution = MagicMock()
+    mock_execution.id = uuid.uuid4()
+    mock_repo = AsyncMock()
+    mock_repo.get_execution = AsyncMock(return_value=mock_execution)
+    mock_repo.list_activities = AsyncMock(return_value=[])
+    mock_session = AsyncMock()
+
+    async def override_session():
+        yield mock_session
+
+    from agent.persistence.database import get_session
+
+    app.dependency_overrides[get_session] = override_session
+
+    with patch("agent.api.routes.agent.ExecutionRepository", return_value=mock_repo):
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.get(f"/agent/activity/{mock_execution.id}")
+
+    app.dependency_overrides.clear()
+    assert response.status_code == 200
+    assert response.json()["activities"] == []

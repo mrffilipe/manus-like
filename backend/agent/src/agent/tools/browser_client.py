@@ -45,3 +45,6 @@ class BrowserClient:
 
     async def screenshot(self) -> dict[str, Any]:
         return await self._post("/screenshot", {})
+
+    async def scroll_capture(self, steps: int = 4) -> dict[str, Any]:
+        return await self._post("/scroll-capture", {"steps": steps})

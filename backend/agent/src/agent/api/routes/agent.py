@@ -1,20 +1,25 @@
 """Agent API routes."""
 
+import asyncio
+import json
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.api.schemas import (
+    ActivityEventResponse,
+    ActivityListResponse,
     AgentStatusResponse,
     ContinueAgentRequest,
     RunAgentRequest,
     RunAgentResponse,
 )
 from agent.persistence.database import get_session
-from agent.persistence.models import ExecutionStatus
+from agent.persistence.models import ExecutionActivity, ExecutionStatus
 from agent.persistence.repository import ExecutionRepository
-from agent.queue.redis_queue import AgentJob, JobType, RedisQueue
+from agent.queue.redis_queue import EVENTS_PREFIX, AgentJob, JobType, RedisQueue
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -27,6 +32,20 @@ async def get_queue() -> RedisQueue:
         _queue = RedisQueue()
         await _queue.connect()
     return _queue
+
+
+def _activity_to_response(activity: ExecutionActivity) -> ActivityEventResponse:
+    return ActivityEventResponse(
+        id=activity.id,
+        execution_id=activity.execution_id,
+        step=activity.step,
+        kind=activity.kind,  # type: ignore[arg-type]
+        title=activity.title,
+        summary=activity.summary,
+        preview_type=activity.preview_type,  # type: ignore[arg-type]
+        preview_data=activity.preview_data,
+        created_at=activity.created_at,
+    )
 
 
 @router.post("/run", response_model=RunAgentResponse)
@@ -71,6 +90,74 @@ async def get_status(
         options=execution.pending_options if execution.status == ExecutionStatus.WAITING_HUMAN_INPUT.value else None,
         error_message=execution.error_message,
         result=result,
+    )
+
+
+@router.get("/activity/{execution_id}", response_model=ActivityListResponse)
+async def get_activity(
+    execution_id: uuid.UUID,
+    since: uuid.UUID | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+) -> ActivityListResponse:
+    repo = ExecutionRepository(session)
+    execution = await repo.get_execution(execution_id)
+    if execution is None:
+        raise HTTPException(status_code=404, detail="Execution not found")
+
+    activities = await repo.list_activities(execution_id, since_id=since)
+    return ActivityListResponse(
+        execution_id=execution_id,
+        activities=[_activity_to_response(activity) for activity in activities],
+    )
+
+
+@router.get("/events/{execution_id}")
+async def stream_events(
+    execution_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+) -> StreamingResponse:
+    repo = ExecutionRepository(session)
+    execution = await repo.get_execution(execution_id)
+    if execution is None:
+        raise HTTPException(status_code=404, detail="Execution not found")
+
+    async def event_generator():
+        queue = RedisQueue()
+        await queue.connect()
+        assert queue.redis is not None
+        pubsub = queue.redis.pubsub()
+        channel = f"{EVENTS_PREFIX}{execution_id}"
+        await pubsub.subscribe(channel)
+        try:
+            while True:
+                message = await pubsub.get_message(ignore_subscribe_messages=True, timeout=15.0)
+                if message and message.get("type") == "message":
+                    data = message.get("data")
+                    if isinstance(data, bytes):
+                        data = data.decode("utf-8")
+                    yield f"data: {data}\n\n"
+                    try:
+                        payload = json.loads(data)
+                        if payload.get("event") in {"completed", "failed", "waiting_human_input"}:
+                            break
+                    except json.JSONDecodeError:
+                        pass
+                else:
+                    yield ": heartbeat\n\n"
+                    await asyncio.sleep(0)
+        finally:
+            await pubsub.unsubscribe(channel)
+            await pubsub.aclose()
+            await queue.close()
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

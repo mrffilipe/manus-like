@@ -39,4 +39,17 @@ Reply with one fact per line, or 'none' if nothing worth storing."""
         "memory_context": memory_context + stored,
         "next_route": "critic",
         "messages": [AIMessage(content=f"[Memory] Recalled {len(memory_context)}, stored {len(stored)} facts")],
+        "activity_events": [
+            {
+                "step": "memory",
+                "kind": "step_done",
+                "title": "Memória atualizada",
+                "summary": f"Recuperados {len(memory_context)}, armazenados {len(stored)} fatos",
+                "preview_type": "markdown",
+                "preview_data": {
+                    "content": "\n".join(f"- {fact}" for fact in memory_context + stored)[:2000]
+                    or "Nenhum fato relevante",
+                },
+            }
+        ],
     }

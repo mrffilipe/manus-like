@@ -1,5 +1,5 @@
 import { api } from '../config'
-import type { AgentStatusResponse, RunAgentRequest, RunAgentResponse } from '../types'
+import type { ActivityListResponse, AgentStatusResponse, RunAgentRequest, RunAgentResponse } from '../types'
 import { apiPaths } from './httpPaths'
 
 export async function runAgent(payload: RunAgentRequest): Promise<RunAgentResponse> {
@@ -9,6 +9,16 @@ export async function runAgent(payload: RunAgentRequest): Promise<RunAgentRespon
 
 export async function getExecutionStatus(executionId: string): Promise<AgentStatusResponse> {
   const response = await api.get<AgentStatusResponse>(apiPaths.agentStatus(executionId))
+  return response.data
+}
+
+export async function getExecutionActivity(
+  executionId: string,
+  since?: string,
+): Promise<ActivityListResponse> {
+  const response = await api.get<ActivityListResponse>(apiPaths.agentActivity(executionId), {
+    params: since ? { since } : undefined,
+  })
   return response.data
 }
 

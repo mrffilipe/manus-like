@@ -90,6 +90,16 @@ SUMMARY: <brief summary of current progress>"""
             "next_route": "human",
             "status": "WaitingHumanInput",
             "messages": [AIMessage(content=f"[Critic] Needs human input: {question}")],
+            "activity_events": [
+                {
+                    "step": "critic",
+                    "kind": "preview",
+                    "title": "Entrada humana necessária",
+                    "summary": question,
+                    "preview_type": "text",
+                    "preview_data": {"content": question, "options": options or []},
+                }
+            ],
         }
 
     if decision == "DONE":
@@ -100,6 +110,16 @@ SUMMARY: <brief summary of current progress>"""
             "status": "Completed",
             "result": deliverable,
             "messages": [AIMessage(content=deliverable or f"[Critic] Completed.\n{text}")],
+            "activity_events": [
+                {
+                    "step": "critic",
+                    "kind": "step_done",
+                    "title": "Tarefa concluída",
+                    "summary": None,
+                    "preview_type": "markdown",
+                    "preview_data": {"content": deliverable or text},
+                }
+            ],
         }
 
     return {
@@ -109,4 +129,14 @@ SUMMARY: <brief summary of current progress>"""
         "status": "Running",
         "iteration": state.get("iteration", 0) + 1,
         "messages": [AIMessage(content=f"[Critic] Continue.\n{text}")],
+        "activity_events": [
+            {
+                "step": "critic",
+                "kind": "step_done",
+                "title": "Continuando trabalho",
+                "summary": None,
+                "preview_type": "markdown",
+                "preview_data": {"content": text[:3000]},
+            }
+        ],
     }

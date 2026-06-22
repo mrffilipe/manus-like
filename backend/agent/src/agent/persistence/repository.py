@@ -6,7 +6,14 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from agent.persistence.models import AgentExecution, Conversation, ExecutionStatus, HumanInput, Message
+from agent.persistence.models import (
+    AgentExecution,
+    Conversation,
+    ExecutionActivity,
+    ExecutionStatus,
+    HumanInput,
+    Message,
+)
 
 
 class ExecutionRepository:
@@ -153,4 +160,53 @@ class ExecutionRepository:
             .where(Message.execution_id == execution_id)
             .order_by(Message.created_at.asc())
         )
+        return list(result.scalars().all())
+
+    async def add_activity(
+        self,
+        execution_id: uuid.UUID,
+        *,
+        step: str,
+        kind: str,
+        title: str,
+        summary: str | None = None,
+        preview_type: str | None = None,
+        preview_data: dict | None = None,
+    ) -> ExecutionActivity:
+        activity = ExecutionActivity(
+            execution_id=execution_id,
+            step=step,
+            kind=kind,
+            title=title,
+            summary=summary,
+            preview_type=preview_type,
+            preview_data=preview_data,
+        )
+        self.session.add(activity)
+        await self.session.commit()
+        await self.session.refresh(activity)
+        return activity
+
+    async def get_activity(self, activity_id: uuid.UUID) -> ExecutionActivity | None:
+        result = await self.session.execute(
+            select(ExecutionActivity).where(ExecutionActivity.id == activity_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_activities(
+        self,
+        execution_id: uuid.UUID,
+        since_id: uuid.UUID | None = None,
+    ) -> list[ExecutionActivity]:
+        query = (
+            select(ExecutionActivity)
+            .where(ExecutionActivity.execution_id == execution_id)
+            .order_by(ExecutionActivity.created_at.asc())
+        )
+        if since_id is not None:
+            ref = await self.get_activity(since_id)
+            if ref is not None:
+                query = query.where(ExecutionActivity.created_at > ref.created_at)
+
+        result = await self.session.execute(query)
         return list(result.scalars().all())

@@ -1,11 +1,15 @@
 """Browser service FastAPI app."""
 
+import logging
 from typing import Literal
 
-from fastapi import FastAPI, Header
-from pydantic import BaseModel, Field
+from fastapi import FastAPI, Header, HTTPException
+from pydantic import BaseModel
+from playwright.async_api import Error as PlaywrightError
 
 from browser_service import playwright_ops
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Browser Service", version="0.1.0")
 
@@ -28,6 +32,10 @@ class ExtractRequest(BaseModel):
     format: Literal["text", "html"] = "text"
 
 
+class ScrollCaptureRequest(BaseModel):
+    steps: int = 4
+
+
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
@@ -38,7 +46,11 @@ async def navigate(
     body: NavigateRequest,
     x_session_id: str | None = Header(default=None),
 ) -> dict:
-    return await playwright_ops.navigate(x_session_id, body.url)
+    try:
+        return await playwright_ops.navigate(x_session_id, body.url)
+    except PlaywrightError as exc:
+        logger.exception("Navigate failed for %s", body.url)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/click")
@@ -68,3 +80,15 @@ async def extract(
 @app.post("/screenshot")
 async def screenshot(x_session_id: str | None = Header(default=None)) -> dict:
     return await playwright_ops.screenshot(x_session_id)
+
+
+@app.post("/scroll-capture")
+async def scroll_capture(
+    body: ScrollCaptureRequest,
+    x_session_id: str | None = Header(default=None),
+) -> dict:
+    try:
+        return await playwright_ops.scroll_and_capture(x_session_id, body.steps)
+    except PlaywrightError as exc:
+        logger.exception("Scroll capture failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc

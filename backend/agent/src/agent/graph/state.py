@@ -24,3 +24,4 @@ class AgentState(TypedDict):
     needs_human: bool
     human_response: str | None
     result: str | None
+    activity_events: Annotated[list[dict], operator.add]

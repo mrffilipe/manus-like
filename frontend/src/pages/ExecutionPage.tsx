@@ -1,6 +1,7 @@
 import { Button, CircularProgress, FormControlLabel, Radio, RadioGroup, Stack, TextField, Typography } from '@mui/material'
 import { useEffect, useState } from 'react'
 import { Link as RouterLink, useParams } from 'react-router'
+import { ActivityPreviewPanel } from '../components/activity'
 import {
   ConfirmDialog,
   FeedbackAlerts,
@@ -11,6 +12,7 @@ import {
   StaticField,
   StatusChip,
 } from '../components/ui'
+import { useExecutionActivity } from '../hooks/useExecutionActivity'
 import { continueExecution, getExecutionStatus, resumeExecution } from '../services'
 import type { AgentStatusResponse } from '../types'
 import { getApiErrorMessage } from '../utils/apiError'
@@ -125,6 +127,13 @@ export function ExecutionPage() {
     }
   }, [executionId, status])
 
+  const { activities, loading: activityLoading, connected } = useExecutionActivity(
+    executionId,
+    status?.status ?? null,
+  )
+
+  const showActivityPanel = status?.status === 'Running' || activities.length > 0
+
   return (
     <Stack spacing={3}>
       <Button component={RouterLink} to="/executions" variant="text" color="inherit" sx={{ alignSelf: 'flex-start', color: 'text.secondary' }}>
@@ -173,6 +182,13 @@ export function ExecutionPage() {
           </Stack>
         ) : null}
       </SectionCard>
+
+      <ActivityPreviewPanel
+        activities={activities}
+        loading={activityLoading}
+        connected={connected}
+        show={showActivityPanel}
+      />
 
       {status?.result ? (
         <SectionCard title="Result">

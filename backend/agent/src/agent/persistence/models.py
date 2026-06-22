@@ -57,6 +57,25 @@ class AgentExecution(Base):
     conversation: Mapped["Conversation | None"] = relationship(back_populates="executions")
     messages: Mapped[list["Message"]] = relationship(back_populates="execution")
     human_inputs: Mapped[list["HumanInput"]] = relationship(back_populates="execution")
+    activities: Mapped[list["ExecutionActivity"]] = relationship(back_populates="execution")
+
+
+class ExecutionActivity(Base):
+    __tablename__ = "execution_activities"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    execution_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("agent_executions.id", ondelete="CASCADE"), nullable=False
+    )
+    step: Mapped[str] = mapped_column(String(64), nullable=False)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    title: Mapped[str] = mapped_column(String(256), nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    preview_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    preview_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    execution: Mapped["AgentExecution"] = relationship(back_populates="activities")
 
 
 class Message(Base):

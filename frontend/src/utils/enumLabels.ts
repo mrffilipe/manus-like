@@ -2,10 +2,10 @@ import type { ExecutionStatus } from '../types'
 
 export function executionStatusLabel(status: ExecutionStatus): string {
   const labels: Record<ExecutionStatus, string> = {
-    Running: 'Running',
-    WaitingHumanInput: 'Waiting for input',
-    Completed: 'Completed',
-    Failed: 'Failed',
+    Running: 'Em execução',
+    WaitingHumanInput: 'Aguardando entrada',
+    Completed: 'Concluído',
+    Failed: 'Falhou',
   }
   return labels[status]
 }
@@ -29,5 +29,19 @@ export function executionStepLabel(step: string | null | undefined): string {
   if (!step) {
     return '—'
   }
-  return step.replace(/_/g, ' ')
+  const labels: Record<string, string> = {
+    planner: 'Planejamento',
+    research: 'Pesquisa',
+    browser: 'Navegador',
+    tool_execution: 'Ferramentas',
+    memory: 'Memória',
+    critic: 'Avaliação',
+    human_input: 'Entrada humana',
+    error: 'Erro',
+  }
+  return labels[step] ?? step.replace(/_/g, ' ')
+}
+
+export function activityStepLabel(step: string): string {
+  return executionStepLabel(step)
 }
