@@ -237,11 +237,9 @@ export function createAppTheme(mode: PaletteMode): Theme {
         MuiDrawer: {
           styleOverrides: {
             paper: {
-              borderRight: `1px solid ${divider}`,
+              borderRight: 'none',
               backgroundImage: 'none',
-              ...(mode === 'dark' && {
-                backgroundColor: tokens.background.paper,
-              }),
+              backgroundColor: mode === 'dark' ? '#111118' : alpha(tokens.background.paper, 0.98),
             },
           },
         },

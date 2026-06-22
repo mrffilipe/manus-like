@@ -29,6 +29,7 @@ export interface RunAgentRequest {
 
 export interface RunAgentResponse {
   execution_id: string
+  conversation_id: string
   status: ExecutionStatus
 }
 
@@ -38,6 +39,7 @@ export interface ContinueAgentRequest {
 
 export interface AgentStatusResponse {
   execution_id: string
+  conversation_id: string | null
   status: ExecutionStatus
   current_step: string | null
   goal: string
@@ -45,6 +47,30 @@ export interface AgentStatusResponse {
   options: string[] | null
   error_message: string | null
   result: string | null
+}
+
+export interface ConversationSummary {
+  id: string
+  title: string | null
+  updated_at: string
+  last_message_preview: string | null
+}
+
+export interface ConversationListResponse {
+  conversations: ConversationSummary[]
+}
+
+export interface ChatMessage {
+  id: string
+  role: string
+  content: string
+  created_at: string
+  execution_id: string | null
+}
+
+export interface ConversationMessagesResponse {
+  conversation_id: string
+  messages: ChatMessage[]
 }
 
 export interface StoredExecution {

@@ -1,15 +1,16 @@
-import { createBrowserRouter } from 'react-router'
+import { createBrowserRouter, Navigate } from 'react-router'
 import { AppLayout } from './components/AppLayout'
-import { ExecutionPage, ExecutionsPage, HomePage, NotFoundPage } from './pages'
+import { ChatPage, NotFoundPage } from './pages'
 
 export const router = createBrowserRouter([
   {
     path: '/',
     Component: AppLayout,
     children: [
-      { index: true, Component: HomePage },
-      { path: 'executions', Component: ExecutionsPage },
-      { path: 'executions/:executionId', Component: ExecutionPage },
+      { index: true, Component: ChatPage },
+      { path: 'c/:conversationId', Component: ChatPage },
+      { path: 'executions', element: <Navigate to="/" replace /> },
+      { path: 'executions/:executionId', element: <Navigate to="/" replace /> },
       { path: '*', Component: NotFoundPage },
     ],
   },

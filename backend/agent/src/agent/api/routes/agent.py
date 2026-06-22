@@ -13,13 +13,20 @@ from agent.api.schemas import (
     ActivityListResponse,
     AgentStatusResponse,
     ContinueAgentRequest,
+    ConversationListResponse,
+    ConversationMessagesResponse,
+    ConversationSummary,
+    DeleteConversationResponse,
+    MessageResponse,
     RunAgentRequest,
     RunAgentResponse,
 )
+from agent.llm.gemini import get_llm_provider
 from agent.persistence.database import get_session
 from agent.persistence.models import ExecutionActivity, ExecutionStatus
 from agent.persistence.repository import ExecutionRepository
 from agent.queue.redis_queue import EVENTS_PREFIX, AgentJob, JobType, RedisQueue
+from agent.tools.memory_client import MemoryClient
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -61,7 +68,80 @@ async def run_agent(
         user_id=body.user_id,
     )
     await queue.enqueue(AgentJob(execution_id=str(execution.id), job_type=JobType.RUN))
-    return RunAgentResponse(execution_id=execution.id, status="Running")
+    return RunAgentResponse(
+        execution_id=execution.id,
+        conversation_id=execution.conversation_id,
+        status="Running",
+    )
+
+
+@router.get("/conversations", response_model=ConversationListResponse)
+async def list_conversations(
+    user_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+    session: AsyncSession = Depends(get_session),
+) -> ConversationListResponse:
+    repo = ExecutionRepository(session)
+    items = await repo.list_conversations(user_id=user_id, limit=limit)
+    return ConversationListResponse(
+        conversations=[
+            ConversationSummary(
+                id=conversation.id,
+                title=conversation.title,
+                updated_at=conversation.updated_at,
+                last_message_preview=(
+                    preview[:120] + "…" if preview and len(preview) > 120 else preview
+                ),
+            )
+            for conversation, preview in items
+        ]
+    )
+
+
+@router.get("/conversations/{conversation_id}/messages", response_model=ConversationMessagesResponse)
+async def get_conversation_messages(
+    conversation_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+) -> ConversationMessagesResponse:
+    repo = ExecutionRepository(session)
+    conversation = await repo.get_conversation(conversation_id)
+    if conversation is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    messages = await repo.get_conversation_messages(conversation_id)
+    return ConversationMessagesResponse(
+        conversation_id=conversation_id,
+        messages=[
+            MessageResponse(
+                id=message.id,
+                role=message.role,
+                content=message.content,
+                created_at=message.created_at,
+                execution_id=message.execution_id,
+            )
+            for message in messages
+        ],
+    )
+
+
+@router.delete("/conversations/{conversation_id}", response_model=DeleteConversationResponse)
+async def delete_conversation(
+    conversation_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+) -> DeleteConversationResponse:
+    repo = ExecutionRepository(session)
+    execution_ids = await repo.delete_conversation(conversation_id)
+    if execution_ids is None:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    if execution_ids:
+        memory = MemoryClient(get_llm_provider())
+        try:
+            await memory.delete_by_execution_ids(execution_ids)
+        except Exception:
+            pass
+
+    return DeleteConversationResponse(conversation_id=conversation_id, deleted=True)
 
 
 @router.get("/status/{execution_id}", response_model=AgentStatusResponse)
@@ -83,6 +163,7 @@ async def get_status(
 
     return AgentStatusResponse(
         execution_id=execution.id,
+        conversation_id=execution.conversation_id,
         status=execution.status,
         current_step=execution.current_step,
         goal=execution.goal,
@@ -181,7 +262,11 @@ async def resume_agent(
 
     await repo.update_execution(execution_id, status=ExecutionStatus.RUNNING.value, clear_pending=True)
     await queue.enqueue(AgentJob(execution_id=str(execution_id), job_type=JobType.RESUME))
-    return RunAgentResponse(execution_id=execution_id, status="Running")
+    return RunAgentResponse(
+        execution_id=execution_id,
+        conversation_id=execution.conversation_id,
+        status="Running",
+    )
 
 
 @router.post("/continue/{execution_id}", response_model=RunAgentResponse)
@@ -199,6 +284,7 @@ async def continue_agent(
     if execution.status != ExecutionStatus.WAITING_HUMAN_INPUT.value:
         raise HTTPException(status_code=400, detail="Execution is not waiting for human input")
 
+    await repo.add_message(execution_id, "user", body.answer)
     await repo.resolve_human_input(execution_id, body.answer)
     await repo.update_execution(execution_id, status=ExecutionStatus.RUNNING.value, clear_pending=True)
     await queue.enqueue(
@@ -208,4 +294,8 @@ async def continue_agent(
             human_response=body.answer,
         )
     )
-    return RunAgentResponse(execution_id=execution_id, status="Running")
+    return RunAgentResponse(
+        execution_id=execution_id,
+        conversation_id=execution.conversation_id,
+        status="Running",
+    )

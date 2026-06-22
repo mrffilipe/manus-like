@@ -4,17 +4,18 @@ import type { ActivityEvent } from '../../types'
 
 interface ActivityPreviewProps {
   activity: ActivityEvent
+  linear?: boolean
 }
 
-function MarkdownBlock({ content }: { content: string }) {
+function MarkdownBlock({ content, linear = false }: { content: string; linear?: boolean }) {
   return (
-    <Box sx={{ mt: 1, maxHeight: 320, overflow: 'auto' }}>
+    <Box sx={{ mt: 1, ...(linear ? {} : { maxHeight: 320, overflow: 'auto' }) }}>
       <MarkdownContent content={content} />
     </Box>
   )
 }
 
-export function ActivityPreview({ activity }: ActivityPreviewProps) {
+export function ActivityPreview({ activity, linear = false }: ActivityPreviewProps) {
   const { preview_type: previewType, preview_data: data } = activity
   if (!previewType || !data) {
     return null
@@ -80,7 +81,7 @@ export function ActivityPreview({ activity }: ActivityPreviewProps) {
               {url}
             </Link>
           ) : null}
-          {excerpt ? <MarkdownBlock content={excerpt} /> : null}
+          {excerpt ? <MarkdownBlock content={excerpt} linear={linear} /> : null}
         </Stack>
       </Stack>
     )
@@ -92,7 +93,7 @@ export function ActivityPreview({ activity }: ActivityPreviewProps) {
   }
 
   if (previewType === 'markdown' || previewType === 'text') {
-    return <MarkdownBlock content={content} />
+    return <MarkdownBlock content={content} linear={linear} />
   }
 
   return (

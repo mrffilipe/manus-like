@@ -3,10 +3,19 @@
  * and docs/Brand guideline/Brand-guideline.png
  */
 export const layout = {
-  sidebarWidth: 280,
+  sidebarWidth: 320,
   contentMaxWidth: 1200,
   authMaxWidth: 440,
   bootstrapMaxWidth: 560,
+  appBarHeight: 52,
+} as const
+
+export const chat = {
+  threadMaxWidth: 760,
+  composerMaxWidth: 720,
+  sidebarItemRadius: 10,
+  composerRadius: 20,
+  messageGap: 3,
 } as const
 
 export const radius = {

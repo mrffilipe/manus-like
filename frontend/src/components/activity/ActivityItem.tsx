@@ -7,6 +7,7 @@ import { ActivityPreview, shouldShowSummary } from './ActivityPreview'
 interface ActivityItemProps {
   activity: ActivityEvent
   isLast?: boolean
+  linear?: boolean
 }
 
 function formatTime(value: string): string {
@@ -17,7 +18,7 @@ function formatTime(value: string): string {
   }
 }
 
-export function ActivityItem({ activity, isLast = false }: ActivityItemProps) {
+export function ActivityItem({ activity, isLast = false, linear = false }: ActivityItemProps) {
   const isError = activity.kind === 'error'
   const showSummary = shouldShowSummary(activity)
 
@@ -59,7 +60,7 @@ export function ActivityItem({ activity, isLast = false }: ActivityItemProps) {
             {activity.summary}
           </Typography>
         ) : null}
-        {!isError ? <ActivityPreview activity={activity} /> : null}
+        {!isError ? <ActivityPreview activity={activity} linear={linear} /> : null}
       </Box>
     </Stack>
   )

@@ -181,6 +181,7 @@ class GraphRunner:
                     state["pending_question"],
                     state.get("pending_options"),
                 )
+                await repo.add_message(execution_id, "assistant", state["pending_question"])
 
         await repo.update_execution(
             execution_id,

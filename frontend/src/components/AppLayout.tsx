@@ -1,144 +1,130 @@
-import DashboardOutlinedIcon from '@mui/icons-material/DashboardOutlined'
-import SmartToyOutlinedIcon from '@mui/icons-material/SmartToyOutlined'
 import MenuIcon from '@mui/icons-material/Menu'
 import {
   AppBar,
   Box,
   Drawer,
   IconButton,
-  List,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
   Toolbar,
-  Typography,
 } from '@mui/material'
-import type { ReactElement } from 'react'
-import { useMemo, useState } from 'react'
-import { Link, Outlet, useLocation } from 'react-router'
+import { useState } from 'react'
+import { Outlet } from 'react-router'
 import { ThemeModeToggle } from './ThemeModeToggle'
+import { ConversationsDrawer } from './chat/ConversationsDrawer'
 import { PlatformBrand } from './ui/PlatformBrand'
+import { useConversations } from '../hooks/useConversations'
 import { layout } from '../theme'
 
-const appBarHeight = 64
-
-interface NavItem {
-  to: string
-  label: string
-  icon: ReactElement
-}
-
-interface NavGroup {
-  label: string
-  items: NavItem[]
-}
-
-const navGroups: NavGroup[] = [
-  {
-    label: 'General',
-    items: [{ to: '/', label: 'Dashboard', icon: <DashboardOutlinedIcon /> }],
-  },
-  {
-    label: 'Agent',
-    items: [{ to: '/executions', label: 'Executions', icon: <SmartToyOutlinedIcon /> }],
-  },
-]
-
-function isNavActive(pathname: string, to: string): boolean {
-  if (to === '/') {
-    return pathname === '/'
-  }
-  return pathname === to || pathname.startsWith(`${to}/`)
-}
+const { sidebarWidth, appBarHeight } = layout
 
 export function AppLayout() {
-  const location = useLocation()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { conversations, loading, refetch } = useConversations()
 
-  const drawerContent = useMemo(
-    () => (
-      <Box sx={{ py: 1 }}>
-        {navGroups.map((group) => (
-          <Box key={group.label} sx={{ mb: 1 }}>
-            <Typography
-              variant="overline"
-              sx={{ px: 2, py: 1, display: 'block', color: 'text.secondary' }}
-            >
-              {group.label}
-            </Typography>
-            <List dense disablePadding>
-              {group.items.map((item) => {
-                const active = isNavActive(location.pathname, item.to)
-                return (
-                  <ListItemButton
-                    key={item.to}
-                    component={Link}
-                    to={item.to}
-                    selected={active}
-                    onClick={() => setMobileOpen(false)}
-                    sx={{ mx: 1, borderRadius: 2 }}
-                  >
-                    <ListItemIcon sx={{ minWidth: 40 }}>{item.icon}</ListItemIcon>
-                    <ListItemText primary={item.label} />
-                  </ListItemButton>
-                )
-              })}
-            </List>
-          </Box>
-        ))}
-      </Box>
-    ),
-    [location.pathname],
+  const drawerContent = (
+    <ConversationsDrawer
+      conversations={conversations}
+      loading={loading}
+      onNavigate={() => setMobileOpen(false)}
+      onConversationDeleted={() => void refetch()}
+      headerSlot={
+        <Box
+          sx={{
+            display: { xs: 'none', md: 'flex' },
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            px: 2,
+            pt: 2,
+            pb: 1,
+          }}
+        >
+          <PlatformBrand logoSize={32} />
+          <ThemeModeToggle />
+        </Box>
+      }
+    />
   )
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
       <AppBar
         position="fixed"
         elevation={0}
         sx={{
+          zIndex: (theme) => theme.zIndex.drawer + 1,
           height: appBarHeight,
-          bgcolor: 'background.paper',
+          bgcolor: 'transparent',
           color: 'text.primary',
-          borderBottom: 1,
-          borderColor: 'divider',
+          borderBottom: 'none',
+          display: { md: 'none' },
         }}
       >
-        <Toolbar sx={{ minHeight: `${appBarHeight}px !important`, gap: 1 }}>
-          <IconButton edge="start" onClick={() => setMobileOpen(true)} sx={{ display: { md: 'none' } }}>
+        <Toolbar sx={{ minHeight: `${appBarHeight}px !important`, gap: 1, px: 2 }}>
+          <IconButton edge="start" onClick={() => setMobileOpen(true)} size="small">
             <MenuIcon />
           </IconButton>
-          <PlatformBrand />
+          <PlatformBrand logoSize={28} />
           <Box sx={{ flexGrow: 1 }} />
           <ThemeModeToggle />
         </Toolbar>
       </AppBar>
 
-      <Drawer
-        variant="temporary"
-        open={mobileOpen}
-        onClose={() => setMobileOpen(false)}
-        ModalProps={{ keepMounted: true }}
-        sx={{
-          display: { xs: 'block', md: 'none' },
-          '& .MuiDrawer-paper': { width: layout.sidebarWidth, boxSizing: 'border-box' },
-        }}
+      <Box
+        component="nav"
+        sx={{ width: { md: sidebarWidth }, flexShrink: { md: 0 } }}
       >
-        {drawerContent}
-      </Drawer>
+        <Drawer
+          variant="temporary"
+          open={mobileOpen}
+          onClose={() => setMobileOpen(false)}
+          ModalProps={{ keepMounted: true }}
+          sx={{
+            display: { xs: 'block', md: 'none' },
+            '& .MuiDrawer-paper': {
+              width: sidebarWidth,
+              boxSizing: 'border-box',
+              top: appBarHeight,
+              height: `calc(100% - ${appBarHeight}px)`,
+            },
+          }}
+        >
+          {drawerContent}
+        </Drawer>
+
+        <Drawer
+          variant="permanent"
+          open
+          sx={{
+            display: { xs: 'none', md: 'block' },
+            '& .MuiDrawer-paper': {
+              width: sidebarWidth,
+              boxSizing: 'border-box',
+              top: 0,
+              height: '100%',
+              borderRight: 'none',
+            },
+          }}
+        >
+          {drawerContent}
+        </Drawer>
+      </Box>
 
       <Box
         component="main"
         sx={{
-          pt: `${appBarHeight + 24}px`,
-          pb: 6,
-          px: { xs: 2, sm: 3 },
+          flexGrow: 1,
+          width: { md: `calc(100% - ${sidebarWidth}px)` },
+          minHeight: '100vh',
+          display: 'flex',
+          flexDirection: 'column',
+          pt: { xs: `${appBarHeight}px`, md: 0 },
         }}
       >
-        <Box sx={{ maxWidth: layout.contentMaxWidth, mx: 'auto' }}>
-          <Outlet />
-        </Box>
+        <Outlet context={{ refetchConversations: refetch }} />
       </Box>
     </Box>
   )
+}
+
+export interface AppLayoutOutletContext {
+  refetchConversations: () => Promise<void>
 }

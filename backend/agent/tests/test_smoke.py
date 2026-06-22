@@ -133,6 +133,7 @@ async def test_fake_queue_enqueue():
 async def test_run_agent_enqueues_job(fake_queue):
     mock_execution = MagicMock()
     mock_execution.id = uuid.uuid4()
+    mock_execution.conversation_id = uuid.uuid4()
     mock_repo = AsyncMock()
     mock_repo.create_execution = AsyncMock(return_value=mock_execution)
     mock_session = AsyncMock()
@@ -165,6 +166,7 @@ async def test_run_agent_enqueues_job(fake_queue):
 async def test_continue_requires_waiting_status(fake_queue):
     mock_execution = MagicMock()
     mock_execution.id = uuid.uuid4()
+    mock_execution.conversation_id = uuid.uuid4()
     mock_execution.status = "Running"
     mock_repo = AsyncMock()
     mock_repo.get_execution = AsyncMock(return_value=mock_execution)
@@ -197,6 +199,7 @@ async def test_continue_requires_waiting_status(fake_queue):
 async def test_agent_activity_list():
     mock_execution = MagicMock()
     mock_execution.id = uuid.uuid4()
+    mock_execution.conversation_id = uuid.uuid4()
     mock_repo = AsyncMock()
     mock_repo.get_execution = AsyncMock(return_value=mock_execution)
     mock_repo.list_activities = AsyncMock(return_value=[])

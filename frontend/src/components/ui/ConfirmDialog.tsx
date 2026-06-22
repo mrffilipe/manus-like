@@ -34,13 +34,22 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth scroll="paper">
-      <DialogTitle>{title}</DialogTitle>
-      <DialogContent dividers>
+      <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
+      <DialogContent sx={{ px: 3, pt: 0, pb: 2.5 }}>
         <Typography variant="body2" color="text.secondary">
           {message}
         </Typography>
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 2.5, pt: 0, gap: 1 }}>
+      <DialogActions
+        sx={{
+          px: 3,
+          pt: 2.5,
+          pb: 3,
+          gap: 1.5,
+          borderTop: 1,
+          borderColor: 'divider',
+        }}
+      >
         <BackButton disabled={loading} onClick={onClose}>
           {cancelLabel}
         </BackButton>

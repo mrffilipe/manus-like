@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import delete, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.persistence.models import (
@@ -94,6 +94,57 @@ class ExecutionRepository:
         await self.session.refresh(execution)
         return execution
 
+    async def get_conversation(self, conversation_id: uuid.UUID) -> Conversation | None:
+        result = await self.session.execute(
+            select(Conversation).where(Conversation.id == conversation_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def list_conversations(
+        self,
+        user_id: str | None = None,
+        limit: int = 50,
+    ) -> list[tuple[Conversation, str | None]]:
+        query = select(Conversation).order_by(Conversation.updated_at.desc()).limit(limit)
+        if user_id is not None:
+            query = query.where(Conversation.user_id == user_id)
+
+        result = await self.session.execute(query)
+        conversations = list(result.scalars().all())
+
+        items: list[tuple[Conversation, str | None]] = []
+        for conversation in conversations:
+            preview_result = await self.session.execute(
+                select(Message.content)
+                .where(Message.conversation_id == conversation.id)
+                .order_by(Message.created_at.desc())
+                .limit(1)
+            )
+            items.append((conversation, preview_result.scalar_one_or_none()))
+        return items
+
+    async def get_conversation_messages(self, conversation_id: uuid.UUID) -> list[Message]:
+        result = await self.session.execute(
+            select(Message)
+            .where(Message.conversation_id == conversation_id)
+            .order_by(Message.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+    async def get_latest_execution(self, conversation_id: uuid.UUID) -> AgentExecution | None:
+        result = await self.session.execute(
+            select(AgentExecution)
+            .where(AgentExecution.conversation_id == conversation_id)
+            .order_by(AgentExecution.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    async def _touch_conversation(self, conversation_id: uuid.UUID) -> None:
+        conversation = await self.get_conversation(conversation_id)
+        if conversation is not None:
+            conversation.updated_at = datetime.now(timezone.utc)
+
     async def add_message(
         self,
         execution_id: uuid.UUID,
@@ -113,6 +164,7 @@ class ExecutionRepository:
             metadata_=metadata,
         )
         self.session.add(message)
+        await self._touch_conversation(execution.conversation_id)
         await self.session.commit()
         return message
 
@@ -210,3 +262,55 @@ class ExecutionRepository:
 
         result = await self.session.execute(query)
         return list(result.scalars().all())
+
+    async def get_execution_ids_for_conversation(self, conversation_id: uuid.UUID) -> list[uuid.UUID]:
+        result = await self.session.execute(
+            select(AgentExecution.id).where(AgentExecution.conversation_id == conversation_id)
+        )
+        return list(result.scalars().all())
+
+    async def delete_conversation(self, conversation_id: uuid.UUID) -> list[str] | None:
+        conversation = await self.get_conversation(conversation_id)
+        if conversation is None:
+            return None
+
+        execution_ids = await self.get_execution_ids_for_conversation(conversation_id)
+        execution_id_strs = [str(execution_id) for execution_id in execution_ids]
+
+        if execution_ids:
+            await self.session.execute(
+                delete(HumanInput).where(HumanInput.execution_id.in_(execution_ids))
+            )
+            await self.session.execute(
+                delete(ExecutionActivity).where(ExecutionActivity.execution_id.in_(execution_ids))
+            )
+
+        await self.session.execute(
+            delete(Message).where(Message.conversation_id == conversation_id)
+        )
+
+        if execution_ids:
+            await self.session.execute(
+                delete(AgentExecution).where(AgentExecution.conversation_id == conversation_id)
+            )
+
+        await self.session.execute(
+            delete(Conversation).where(Conversation.id == conversation_id)
+        )
+
+        if execution_id_strs:
+            await self.session.execute(
+                text("DELETE FROM checkpoint_writes WHERE thread_id = ANY(:ids)"),
+                {"ids": execution_id_strs},
+            )
+            await self.session.execute(
+                text("DELETE FROM checkpoint_blobs WHERE thread_id = ANY(:ids)"),
+                {"ids": execution_id_strs},
+            )
+            await self.session.execute(
+                text("DELETE FROM checkpoints WHERE thread_id = ANY(:ids)"),
+                {"ids": execution_id_strs},
+            )
+
+        await self.session.commit()
+        return execution_id_strs

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 from qdrant_client import AsyncQdrantClient
-from qdrant_client.models import Distance, FieldCondition, Filter, MatchValue, PointStruct, VectorParams
+from qdrant_client.models import Distance, FieldCondition, Filter, MatchAny, MatchValue, PointStruct, VectorParams
 
 from agent.config import settings
 from agent.llm.base import LLMProvider
@@ -87,3 +87,18 @@ class MemoryClient:
             }
             for hit in response.points
         ]
+
+    async def delete_by_execution_ids(self, execution_ids: list[str]) -> None:
+        if not execution_ids:
+            return
+
+        collections = await self.client.get_collections()
+        if self.collection not in [collection.name for collection in collections.collections]:
+            return
+
+        await self.client.delete(
+            collection_name=self.collection,
+            points_selector=Filter(
+                must=[FieldCondition(key="execution_id", match=MatchAny(any=execution_ids))]
+            ),
+        )

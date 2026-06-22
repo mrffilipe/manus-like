@@ -23,27 +23,27 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
 
   const components: Components = {
     h1: ({ children }) => (
-      <Typography variant="h4" component="h1" sx={{ mt: 2, mb: 1.5, fontWeight: 700 }}>
+      <Typography variant="h4" component="h1" sx={{ mt: 2, mb: 1.25, fontWeight: 700, letterSpacing: '-0.02em' }}>
         {children}
       </Typography>
     ),
     h2: ({ children }) => (
-      <Typography variant="h5" component="h2" sx={{ mt: 2, mb: 1.5, fontWeight: 700 }}>
+      <Typography variant="h5" component="h2" sx={{ mt: 1.75, mb: 1.25, fontWeight: 700, letterSpacing: '-0.02em' }}>
         {children}
       </Typography>
     ),
     h3: ({ children }) => (
-      <Typography variant="h6" component="h3" sx={{ mt: 1.5, mb: 1, fontWeight: 600 }}>
+      <Typography variant="h6" component="h3" sx={{ mt: 1.5, mb: 0.75, fontWeight: 600, letterSpacing: '-0.01em' }}>
         {children}
       </Typography>
     ),
     h4: ({ children }) => (
-      <Typography variant="subtitle1" component="h4" sx={{ mt: 1.5, mb: 1, fontWeight: 600 }}>
+      <Typography variant="subtitle1" component="h4" sx={{ mt: 1.25, mb: 0.75, fontWeight: 600 }}>
         {children}
       </Typography>
     ),
     p: ({ children }) => (
-      <Typography variant="body1" component="p" sx={{ mb: 1.5, lineHeight: 1.7 }}>
+      <Typography variant="body1" component="p" sx={{ mb: 1.25, lineHeight: 1.75, fontSize: '0.9375rem' }}>
         {children}
       </Typography>
     ),
@@ -58,7 +58,7 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
       </Box>
     ),
     li: ({ children }) => (
-      <Typography component="li" variant="body1" sx={{ lineHeight: 1.7 }}>
+      <Typography component="li" variant="body1" sx={{ lineHeight: 1.75, fontSize: '0.9375rem' }}>
         {children}
       </Typography>
     ),

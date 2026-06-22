@@ -15,6 +15,7 @@ class RunAgentRequest(BaseModel):
 
 class RunAgentResponse(BaseModel):
     execution_id: uuid.UUID
+    conversation_id: uuid.UUID
     status: Literal["Running", "WaitingHumanInput", "Completed", "Failed"]
 
 
@@ -24,6 +25,7 @@ class ContinueAgentRequest(BaseModel):
 
 class AgentStatusResponse(BaseModel):
     execution_id: uuid.UUID
+    conversation_id: uuid.UUID | None = None
     status: Literal["Running", "WaitingHumanInput", "Completed", "Failed"]
     current_step: str | None = None
     goal: str
@@ -31,6 +33,35 @@ class AgentStatusResponse(BaseModel):
     options: list[str] | None = None
     error_message: str | None = None
     result: str | None = None
+
+
+class ConversationSummary(BaseModel):
+    id: uuid.UUID
+    title: str | None
+    updated_at: datetime
+    last_message_preview: str | None = None
+
+
+class ConversationListResponse(BaseModel):
+    conversations: list[ConversationSummary]
+
+
+class MessageResponse(BaseModel):
+    id: uuid.UUID
+    role: str
+    content: str
+    created_at: datetime
+    execution_id: uuid.UUID | None = None
+
+
+class ConversationMessagesResponse(BaseModel):
+    conversation_id: uuid.UUID
+    messages: list[MessageResponse]
+
+
+class DeleteConversationResponse(BaseModel):
+    conversation_id: uuid.UUID
+    deleted: bool
 
 
 class ActivityEventResponse(BaseModel):
