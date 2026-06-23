@@ -2,6 +2,7 @@
 
 from langchain_core.messages import AIMessage
 
+from agent.graph.conversation_context import format_conversation_history
 from agent.graph.deps import NodeContext
 from agent.graph.state import AgentState
 from agent.llm.base import Message
@@ -9,13 +10,19 @@ from agent.llm.base import Message
 
 async def planner_node(state: AgentState, ctx: NodeContext) -> dict:
     memory_snippets = "\n".join(state.get("memory_context", []))
+    conversation_history = format_conversation_history(state.get("messages", []), state["goal"])
+    history_section = f"\n{conversation_history}\n" if conversation_history else ""
     prompt = f"""You are an autonomous agent planner.
 Goal: {state['goal']}
 Current iteration: {state.get('iteration', 0)}
-Memory context:
+{history_section}Memory context:
 {memory_snippets or 'None'}
 
-Create a concise plan for the next actions. Decide which capability to use next:
+Create a concise plan for the next actions. If the conversation history already contains
+the information needed to answer the current goal, prefer using critic or tools instead of
+re-fetching the same website or repeating prior research.
+
+Decide which capability to use next:
 - research: web search
 - browser: navigate websites
 - tools: execute generic tool calls

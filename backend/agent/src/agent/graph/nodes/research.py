@@ -2,22 +2,47 @@
 
 from langchain_core.messages import AIMessage
 
+from agent.graph.conversation_context import format_conversation_history
 from agent.graph.deps import NodeContext
 from agent.graph.state import AgentState
 from agent.llm.base import Message
 
 
 async def research_node(state: AgentState, ctx: NodeContext) -> dict:
+    conversation_history = format_conversation_history(state.get("messages", []), state["goal"])
+    history_section = f"\n{conversation_history}\n" if conversation_history else ""
     query_prompt = f"""Given this goal: {state['goal']}
 And plan: {state.get('plan', '')}
-Generate a single concise web search query. Reply with only the query text."""
+{history_section}Generate a single concise web search query. If the conversation history already
+contains enough information to answer the goal, reply with: SKIP_RESEARCH
+Otherwise reply with only the query text."""
 
     query_response = await ctx.llm.chat([Message(role="user", content=query_prompt)])
     query = query_response.content.strip().strip('"')
 
+    if query.upper() == "SKIP_RESEARCH":
+        return {
+            "current_step": "research",
+            "research_results": [],
+            "next_route": "critic",
+            "messages": [
+                AIMessage(content="[Research] Skipped — sufficient context from conversation history.")
+            ],
+            "activity_events": [
+                {
+                    "step": "research",
+                    "kind": "step_done",
+                    "title": "Pesquisa dispensada",
+                    "summary": "Contexto da conversa já contém informações suficientes",
+                    "preview_type": "text",
+                    "preview_data": {"content": "Usando histórico da conversa"},
+                }
+            ],
+        }
+
     results = await ctx.search.search(query, limit=5)
     summary_prompt = f"""Summarize these search results for the goal: {state['goal']}
-
+{history_section}
 Results:
 {results}
 

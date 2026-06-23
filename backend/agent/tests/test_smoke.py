@@ -53,6 +53,7 @@ async def test_agent_state_structure():
         tool_calls=[],
         memory_context=[],
         execution_id="123",
+        conversation_id=None,
         status="Running",
         pending_question=None,
         pending_options=None,

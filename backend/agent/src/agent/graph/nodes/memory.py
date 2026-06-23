@@ -10,9 +10,11 @@ from agent.llm.base import Message
 async def memory_node(state: AgentState, ctx: NodeContext) -> dict:
     assert ctx.memory is not None
 
+    conversation_id = state.get("conversation_id")
     recalled = await ctx.memory.search(
         state["goal"],
-        execution_id=state["execution_id"],
+        execution_id=state["execution_id"] if not conversation_id else None,
+        conversation_id=conversation_id,
         limit=5,
     )
     memory_context = [item["content"] for item in recalled if item.get("content")]
@@ -31,7 +33,12 @@ Reply with one fact per line, or 'none' if nothing worth storing."""
     for line in store_response.content.splitlines():
         fact = line.strip().lstrip("-").strip()
         if fact and fact.lower() != "none":
-            await ctx.memory.store(fact, execution_id=state["execution_id"], memory_type="fact")
+            await ctx.memory.store(
+                fact,
+                execution_id=state["execution_id"],
+                conversation_id=conversation_id,
+                memory_type="fact",
+            )
             stored.append(fact)
 
     return {

@@ -94,6 +94,59 @@ class ExecutionRepository:
         await self.session.refresh(execution)
         return execution
 
+    async def finalize_execution(
+        self,
+        execution_id: uuid.UUID,
+        *,
+        status: str,
+        current_step: str | None = None,
+        pending_question: str | None = None,
+        pending_options: list | None = None,
+        result: str | None = None,
+        assistant_content: str | None = None,
+        clear_pending: bool = False,
+        human_input_question: str | None = None,
+        human_input_options: list | None = None,
+    ) -> AgentExecution | None:
+        execution = await self.get_execution(execution_id)
+        if execution is None:
+            return None
+
+        execution.status = status
+        if current_step is not None:
+            execution.current_step = current_step
+        if pending_question is not None:
+            execution.pending_question = pending_question
+        if pending_options is not None:
+            execution.pending_options = pending_options
+        if result is not None:
+            execution.result = result
+        if clear_pending:
+            execution.pending_question = None
+            execution.pending_options = None
+
+        if human_input_question is not None:
+            human_input = HumanInput(
+                execution_id=execution_id,
+                question=human_input_question,
+                options=human_input_options,
+            )
+            self.session.add(human_input)
+
+        if assistant_content and execution.conversation_id is not None:
+            message = Message(
+                conversation_id=execution.conversation_id,
+                execution_id=execution_id,
+                role="assistant",
+                content=assistant_content,
+            )
+            self.session.add(message)
+            await self._touch_conversation(execution.conversation_id)
+
+        await self.session.commit()
+        await self.session.refresh(execution)
+        return execution
+
     async def get_conversation(self, conversation_id: uuid.UUID) -> Conversation | None:
         result = await self.session.execute(
             select(Conversation).where(Conversation.id == conversation_id)

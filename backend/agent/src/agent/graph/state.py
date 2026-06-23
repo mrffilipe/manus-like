@@ -13,6 +13,7 @@ class AgentState(TypedDict):
     tool_calls: list[dict]
     memory_context: list[str]
     execution_id: str
+    conversation_id: str | None
     status: Literal["Running", "WaitingHumanInput", "Completed", "Failed"]
     pending_question: str | None
     pending_options: list[str] | None

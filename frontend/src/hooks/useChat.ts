@@ -23,6 +23,18 @@ function findLatestExecutionId(messages: ChatMessage[]): string | null {
   return null
 }
 
+function hasAssistantMessageForExecution(messages: ChatMessage[], executionId: string): boolean {
+  return messages.some(
+    (message) => message.execution_id === executionId && message.role === 'assistant',
+  )
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms)
+  })
+}
+
 export function useChat({
   conversationId,
   onConversationCreated,
@@ -37,11 +49,11 @@ export function useChat({
   const [sending, setSending] = useState(false)
   const activeExecutionRef = useRef<string | null>(null)
 
-  const loadMessages = useCallback(async (silent = false) => {
+  const loadMessages = useCallback(async (silent = false): Promise<ChatMessage[]> => {
     if (!conversationId) {
       setMessages([])
       setLoading(false)
-      return
+      return []
     }
 
     if (!silent) {
@@ -66,10 +78,15 @@ export function useChat({
         setActiveExecutionId(null)
         setExecutionStatus(null)
       }
+
+      return response.messages
     } catch (err) {
       setError(getApiErrorMessage(err))
+      return []
     } finally {
-      setLoading(false)
+      if (!silent) {
+        setLoading(false)
+      }
     }
   }, [conversationId])
 
@@ -104,9 +121,28 @@ export function useChat({
         setExecutionStatus(status)
 
         if (TERMINAL_STATUSES.has(status.status)) {
-          setActiveExecutionId(null)
-          await loadMessages(true)
+          let loadedMessages = await loadMessages(true)
+
+          if (status.status === 'Completed') {
+            for (let attempt = 0; attempt < 5; attempt += 1) {
+              if (hasAssistantMessageForExecution(loadedMessages, executionId)) {
+                break
+              }
+              await sleep(500)
+              loadedMessages = await loadMessages(true)
+            }
+          }
+
           onMessagesUpdated?.()
+
+          const hasAssistant = hasAssistantMessageForExecution(loadedMessages, executionId)
+          if (status.status === 'Failed' || hasAssistant) {
+            setActiveExecutionId(null)
+            setExecutionStatus(null)
+          } else if (status.status === 'Completed') {
+            setActiveExecutionId(null)
+          }
+
           if (intervalId !== undefined) {
             window.clearInterval(intervalId)
           }

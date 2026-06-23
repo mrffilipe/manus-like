@@ -54,6 +54,15 @@ export function ChatPage() {
 
   const showActivityTimeline = Boolean(activeExecutionId) && (isRunning || activities.length > 0)
   const hasMessages = messages.length > 0
+  const pendingAssistantMessage =
+    executionStatus?.status === 'Completed' &&
+    executionStatus.result &&
+    executionStatus.execution_id
+      ? {
+          executionId: executionStatus.execution_id,
+          content: executionStatus.result,
+        }
+      : null
 
   async function handleContinueWithOption() {
     if (!selectedOption) {
@@ -119,7 +128,11 @@ export function ChatPage() {
       ) : (
         <Box sx={{ position: 'relative', flex: 1, minHeight: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
           {hasMessages ? (
-            <ChatThread messages={messages} bottomPadding={footerHeight} />
+            <ChatThread
+              messages={messages}
+              bottomPadding={footerHeight}
+              pendingAssistantMessage={pendingAssistantMessage}
+            />
           ) : (
             <Stack
               sx={{

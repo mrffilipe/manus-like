@@ -10,6 +10,7 @@ from langgraph.types import Command
 from agent.activity.builders import build_fallback_activities
 from agent.activity.recorder import ActivityRecorder
 from agent.graph.builder import build_graph
+from agent.graph.conversation_context import load_prior_messages
 from agent.graph.deps import NodeContext
 from agent.graph.state import AgentState
 from agent.llm.gemini import get_llm_provider
@@ -33,14 +34,23 @@ class GraphRunner:
         self.checkpointer = checkpointer
         self.graph = build_graph(self.ctx, checkpointer)
 
-    def _initial_state(self, execution_id: str, goal: str) -> AgentState:
+    def _initial_state(
+        self,
+        execution_id: str,
+        goal: str,
+        *,
+        prior_messages: list | None = None,
+        conversation_id: str | None = None,
+    ) -> AgentState:
+        history = list(prior_messages or [])
         return AgentState(
             goal=goal,
-            messages=[HumanMessage(content=goal)],
+            messages=[*history, HumanMessage(content=goal)],
             current_step="planner",
             tool_calls=[],
             memory_context=[],
             execution_id=execution_id,
+            conversation_id=conversation_id,
             status="Running",
             pending_question=None,
             pending_options=None,
@@ -122,6 +132,17 @@ class GraphRunner:
             elif resume:
                 result = await self._stream_graph(recorder, repo, execution_id, None, config)
             else:
+                execution = await repo.get_execution(execution_id)
+                prior_messages = []
+                conversation_id: str | None = None
+                if execution is not None and execution.conversation_id is not None:
+                    conversation_id = str(execution.conversation_id)
+                    prior_messages = await load_prior_messages(
+                        repo,
+                        execution.conversation_id,
+                        execution_id,
+                    )
+
                 await recorder.record(
                     step="planner",
                     kind="step_start",
@@ -134,7 +155,12 @@ class GraphRunner:
                     recorder,
                     repo,
                     execution_id,
-                    self._initial_state(eid, goal),
+                    self._initial_state(
+                        eid,
+                        goal,
+                        prior_messages=prior_messages,
+                        conversation_id=conversation_id,
+                    ),
                     config,
                 )
 
@@ -173,30 +199,31 @@ class GraphRunner:
         interrupted: bool = False,
     ) -> None:
         status = state.get("status", ExecutionStatus.RUNNING.value)
+        assistant_content: str | None = None
+        human_input_question: str | None = None
+        human_input_options: list | None = None
+
         if interrupted or state.get("pending_question"):
             status = ExecutionStatus.WAITING_HUMAN_INPUT.value
             if state.get("pending_question"):
-                await repo.create_human_input(
-                    execution_id,
-                    state["pending_question"],
-                    state.get("pending_options"),
-                )
-                await repo.add_message(execution_id, "assistant", state["pending_question"])
+                human_input_question = state["pending_question"]
+                human_input_options = state.get("pending_options")
+                assistant_content = state["pending_question"]
+        elif status == ExecutionStatus.COMPLETED.value:
+            assistant_content = state.get("result")
+            if not assistant_content and state.get("messages"):
+                last = state["messages"][-1]
+                assistant_content = last.content if hasattr(last, "content") else str(last)
 
-        await repo.update_execution(
+        await repo.finalize_execution(
             execution_id,
             status=status,
             current_step=state.get("current_step"),
             pending_question=state.get("pending_question"),
             pending_options=state.get("pending_options"),
             result=state.get("result"),
+            assistant_content=assistant_content,
             clear_pending=status == ExecutionStatus.RUNNING.value,
+            human_input_question=human_input_question,
+            human_input_options=human_input_options,
         )
-
-        if state.get("messages"):
-            last = state["messages"][-1]
-            content = last.content if hasattr(last, "content") else str(last)
-            message_role = "assistant"
-            if status == ExecutionStatus.COMPLETED.value and state.get("result"):
-                content = state["result"]
-            await repo.add_message(execution_id, message_role, content)

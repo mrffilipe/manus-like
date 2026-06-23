@@ -35,6 +35,7 @@ class MemoryClient:
         content: str,
         *,
         execution_id: str,
+        conversation_id: str | None = None,
         user_id: str | None = None,
         memory_type: str = "fact",
     ) -> None:
@@ -42,16 +43,19 @@ class MemoryClient:
         if not embeddings:
             return
         await self.ensure_collection(len(embeddings[0]))
+        payload: dict[str, Any] = {
+            "content": content,
+            "execution_id": execution_id,
+            "user_id": user_id,
+            "type": memory_type,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        if conversation_id is not None:
+            payload["conversation_id"] = conversation_id
         point = PointStruct(
             id=str(uuid.uuid4()),
             vector=embeddings[0],
-            payload={
-                "content": content,
-                "execution_id": execution_id,
-                "user_id": user_id,
-                "type": memory_type,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            },
+            payload=payload,
         )
         await self.client.upsert(collection_name=self.collection, points=[point])
 
@@ -60,6 +64,8 @@ class MemoryClient:
         query: str,
         *,
         execution_id: str | None = None,
+        conversation_id: str | None = None,
+        execution_ids: list[str] | None = None,
         limit: int = 5,
     ) -> list[dict[str, Any]]:
         embeddings = await self.llm.embed([query])
@@ -68,7 +74,15 @@ class MemoryClient:
         await self.ensure_collection(len(embeddings[0]))
 
         query_filter = None
-        if execution_id:
+        if execution_ids:
+            query_filter = Filter(
+                should=[FieldCondition(key="execution_id", match=MatchAny(any=execution_ids))]
+            )
+        elif conversation_id:
+            query_filter = Filter(
+                should=[FieldCondition(key="conversation_id", match=MatchValue(value=conversation_id))]
+            )
+        elif execution_id:
             query_filter = Filter(
                 should=[FieldCondition(key="execution_id", match=MatchValue(value=execution_id))]
             )

@@ -8,14 +8,29 @@ import { chat } from '../../theme/tokens'
 interface ChatThreadProps {
   messages: ChatMessageType[]
   bottomPadding?: number
+  pendingAssistantMessage?: {
+    executionId: string
+    content: string
+  } | null
 }
 
-export function ChatThread({ messages, bottomPadding = 0 }: ChatThreadProps) {
+export function ChatThread({
+  messages,
+  bottomPadding = 0,
+  pendingAssistantMessage = null,
+}: ChatThreadProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
+  const showPendingAssistant =
+    pendingAssistantMessage &&
+    !messages.some(
+      (message) =>
+        message.execution_id === pendingAssistantMessage.executionId &&
+        message.role === 'assistant',
+    )
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, bottomPadding])
+  }, [messages, bottomPadding, pendingAssistantMessage])
 
   return (
     <GhostScrollBox
@@ -39,6 +54,18 @@ export function ChatThread({ messages, bottomPadding = 0 }: ChatThreadProps) {
         {messages.map((message) => (
           <ChatMessage key={message.id} message={message} />
         ))}
+        {showPendingAssistant ? (
+          <ChatMessage
+            key={`pending-${pendingAssistantMessage.executionId}`}
+            message={{
+              id: `pending-${pendingAssistantMessage.executionId}`,
+              role: 'assistant',
+              content: pendingAssistantMessage.content,
+              created_at: new Date().toISOString(),
+              execution_id: pendingAssistantMessage.executionId,
+            }}
+          />
+        ) : null}
       </Stack>
       <div ref={bottomRef} />
     </GhostScrollBox>
