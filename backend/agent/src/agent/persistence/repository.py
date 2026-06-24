@@ -40,6 +40,12 @@ class ExecutionRepository:
             conversation = await self.get_conversation(conversation_id)
             if conversation is not None and conversation.client_id is None:
                 conversation.client_id = client_id
+        else:
+            conversation = await self.get_conversation(conversation_id)
+            if conversation is not None and conversation.client_id is not None:
+                client_id = conversation.client_id
+                if agent_mode in (None, "general"):
+                    agent_mode = "marketing_consultant"
 
         execution = AgentExecution(
             conversation_id=conversation_id,

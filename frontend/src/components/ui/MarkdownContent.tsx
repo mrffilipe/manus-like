@@ -1,4 +1,5 @@
 import {
+  Alert,
   Box,
   Link,
   Table,
@@ -13,6 +14,7 @@ import {
 import type { Components } from 'react-markdown'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { ChartBlock, parseBlockJson } from '../marketing'
 
 interface MarkdownContentProps {
   content: string
@@ -103,28 +105,53 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
         }}
       />
     ),
-    pre: ({ children }) => (
-      <Box
-        component="pre"
-        sx={{
-          bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
-          border: 1,
-          borderColor: 'divider',
-          borderRadius: 1,
-          p: 1.5,
-          mb: 1.5,
-          overflowX: 'auto',
-          fontFamily: 'monospace',
-          fontSize: '0.875rem',
-        }}
-      >
-        {children}
-      </Box>
-    ),
+    pre: ({ children }) => <Box sx={{ mb: 1.5 }}>{children}</Box>,
     code: ({ className, children }) => {
-      if (className) {
-        return <code className={className}>{children}</code>
+      const lang = className?.replace('language-', '')
+      const raw = String(children).replace(/\n$/, '')
+
+      if (lang === 'chart' || lang === 'kpi') {
+        const parsed = parseBlockJson(raw)
+        if (parsed) {
+          return <ChartBlock data={parsed} />
+        }
       }
+
+      if (lang === 'mermaid') {
+        return (
+          <Alert severity="info" sx={{ my: 1.5 }}>
+            Gráfico Mermaid não é suportado neste relatório. Use blocos{' '}
+            <Box component="code" sx={{ fontFamily: 'monospace', fontSize: '0.85em' }}>
+              ```chart
+            </Box>{' '}
+            com JSON estruturado para visualizações interativas.
+          </Alert>
+        )
+      }
+
+      if (className) {
+        return (
+          <Box
+            component="pre"
+            sx={{
+              bgcolor: theme.palette.mode === 'dark' ? 'grey.900' : 'grey.50',
+              border: 1,
+              borderColor: 'divider',
+              borderRadius: 1,
+              p: 1.5,
+              m: 0,
+              overflowX: 'auto',
+              fontFamily: 'monospace',
+              fontSize: '0.875rem',
+            }}
+          >
+            <Box component="code" sx={{ fontFamily: 'inherit', fontSize: 'inherit' }}>
+              {children}
+            </Box>
+          </Box>
+        )
+      }
+
       return (
         <Box
           component="code"

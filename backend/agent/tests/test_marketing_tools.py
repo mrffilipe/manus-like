@@ -8,6 +8,8 @@ def test_analyze_funnel_ctr_bottleneck():
     assert result["rates"]["open_rate"] == 27.0
     assert result["rates"]["ctr"] is not None
     assert result["bottleneck"] == "open_to_click"
+    assert len(result["chart_stages"]) >= 2
+    assert result["chart_stages"][0]["label"] == "Enviados"
 
 
 def test_audit_email_copy_detects_question_cta():

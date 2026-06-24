@@ -6,6 +6,8 @@ import json
 import re
 from typing import Any
 
+from agent.marketing.report_formatter import build_campaign_comparison_visuals, build_chart_stages
+
 
 def _safe_rate(numerator: float, denominator: float) -> float | None:
     if denominator <= 0:
@@ -25,6 +27,10 @@ def analyze_funnel(
     sales: int | None = None,
     open_rate_pct: float | None = None,
     ctr_pct: float | None = None,
+    client_name: str | None = None,
+    title: str | None = None,
+    leads_generated: int | None = None,
+    email_waves: int | None = None,
 ) -> dict[str, Any]:
     """Compute funnel rates and identify the main bottleneck."""
     rates: dict[str, float | None] = {}
@@ -72,15 +78,109 @@ def analyze_funnel(
     if ctr is not None and ctr < 2:
         recommendations.append(f"Meta de CTR: 2-3%. Atual: {ctr}%.")
 
+    chart_stages = build_chart_stages(
+        sent=sent,
+        opened=opened,
+        clicked=clicked,
+        lp_visits=lp_visits,
+        form_fills=form_fills,
+        open_rate_pct=open_rate_pct,
+        ctr_pct=ctr_pct,
+    )
+
     return {
         "rates": rates,
         "bottleneck": bottleneck,
         "recommendations": recommendations,
+        "chart_stages": chart_stages,
+        "chart_title": title or "Onde o funil quebra",
+        "client_name": client_name,
+        "leads_generated": leads_generated,
+        "email_waves": email_waves,
+        "lp_leads": lp_visits,
+        "qualified": qualified,
+        "scheduled": scheduled,
+        "sales": sales,
         "summary": (
             f"Gargalo principal: {bottleneck}. "
             + "; ".join(recommendations[:2])
             if recommendations
             else "Dados insuficientes para diagnóstico completo."
+        ),
+    }
+
+
+def compare_campaign_scenarios(
+    *,
+    baseline_name: str = "Campanha baseline",
+    projected_name: str = "Campanha projetada",
+    baseline_sent: int,
+    baseline_opened: int | None = None,
+    baseline_lp_visits: int | None = None,
+    baseline_hero_bounces: int | None = None,
+    baseline_scrolled: int | None = None,
+    baseline_leads: float | None = None,
+    projected_sent: int | None = None,
+    projected_opened: int | None = None,
+    projected_lp_visits: int | None = None,
+    projected_hero_bounces: int | None = None,
+    projected_scrolled: int | None = None,
+    projected_leads: float | None = None,
+    projected_leads_range: list[float] | None = None,
+    scale_sent: int | None = None,
+    scale_leads: float | None = None,
+    scale_leads_range: list[float] | None = None,
+) -> dict[str, Any]:
+    """Compare baseline vs optimized campaign and emit chart blocks for the UI."""
+    baseline = {
+        "name": baseline_name,
+        "sent": baseline_sent,
+        "opened": baseline_opened,
+        "lp_visits": baseline_lp_visits,
+        "hero_bounces": baseline_hero_bounces,
+        "scrolled": baseline_scrolled,
+        "leads": baseline_leads,
+    }
+    projected = {
+        "name": projected_name,
+        "sent": projected_sent or baseline_sent,
+        "opened": projected_opened,
+        "lp_visits": projected_lp_visits,
+        "hero_bounces": projected_hero_bounces,
+        "scrolled": projected_scrolled,
+        "leads": projected_leads,
+    }
+    if projected_leads_range and len(projected_leads_range) == 2:
+        projected["leads_range"] = projected_leads_range
+
+    scale_projected = None
+    if scale_sent and scale_leads is not None:
+        scale_projected = {"sent": scale_sent, "leads": scale_leads}
+        if scale_leads_range and len(scale_leads_range) == 2:
+            scale_projected["leads_range"] = scale_leads_range
+
+    visual_blocks = build_campaign_comparison_visuals(baseline, projected, scale_projected=scale_projected)
+
+    open_b = _safe_rate(baseline_opened or 0, baseline_sent) if baseline_opened else None
+    open_p = _safe_rate(projected_opened or 0, projected_sent or baseline_sent) if projected_opened else None
+    ctr_b = _safe_rate(baseline_lp_visits or 0, baseline_sent) if baseline_lp_visits else None
+    ctr_p = _safe_rate(projected_lp_visits or 0, projected_sent or baseline_sent) if projected_lp_visits else None
+
+    return {
+        "baseline": baseline,
+        "projected": projected,
+        "scale_projected": scale_projected,
+        "visual_blocks": visual_blocks,
+        "rates": {
+            "baseline_open_rate": open_b,
+            "projected_open_rate": open_p,
+            "baseline_ctr": ctr_b,
+            "projected_ctr": ctr_p,
+        },
+        "summary": (
+            f"Comparação {baseline_name} vs {projected_name}: "
+            f"abertura {open_b or '—'}% → {open_p or '—'}%, "
+            f"CTR {ctr_b or '—'}% → {ctr_p or '—'}%."
         ),
     }
 
@@ -94,17 +194,38 @@ def parse_campaign_report(text: str) -> dict[str, Any]:
 
     open_match = re.search(r"abertura[^0-9]*(\d+[.,]?\d*)%?", text, re.I)
     ctr_match = re.search(r"ctr[^0-9]*(\d+[.,]?\d*)%?", text, re.I)
+    leads_match = re.search(r"leads?\s+gerados?[^0-9]*(\d[\d.,]*)", text, re.I)
+    waves_match = re.search(r"ondas?\s+de\s+email[^0-9]*(\d+)", text, re.I)
+    lp_match = re.search(r"leads?\s+na\s+lp[^0-9]*(\d+)", text, re.I)
+
     if open_match:
         metrics["open_rate_pct"] = float(open_match.group(1).replace(",", "."))
     if ctr_match:
         metrics["ctr_pct"] = float(ctr_match.group(1).replace(",", "."))
+    if leads_match:
+        metrics["leads_generated"] = int(leads_match.group(1).replace(".", "").replace(",", ""))
+    if waves_match:
+        metrics["email_waves"] = int(waves_match.group(1))
+    if lp_match:
+        metrics["lp_leads"] = int(lp_match.group(1))
 
-    if metrics.get("open_rate_pct") or metrics.get("ctr_pct"):
+    client_match = re.search(r"\b(ebox|dochr)\b", text, re.I)
+    if client_match:
+        metrics["client_name"] = client_match.group(1).capitalize()
+
+    sent = ints[0] if ints and ints[0] >= 100 else None
+    if metrics.get("open_rate_pct") or metrics.get("ctr_pct") or sent:
         funnel = analyze_funnel(
+            sent=sent,
             open_rate_pct=metrics.get("open_rate_pct"),
             ctr_pct=metrics.get("ctr_pct"),
+            lp_visits=metrics.get("lp_leads"),
+            client_name=metrics.get("client_name"),
+            leads_generated=metrics.get("leads_generated"),
+            email_waves=metrics.get("email_waves"),
         )
         metrics["funnel_analysis"] = funnel
+        metrics["chart_stages"] = funnel.get("chart_stages", [])
 
     return metrics
 
@@ -290,6 +411,10 @@ MARKETING_TOOLS = [
                 "form_fills": {"type": "integer"},
                 "open_rate_pct": {"type": "number"},
                 "ctr_pct": {"type": "number"},
+                "client_name": {"type": "string"},
+                "title": {"type": "string"},
+                "leads_generated": {"type": "integer"},
+                "email_waves": {"type": "integer"},
             },
         },
     },
@@ -343,6 +468,37 @@ MARKETING_TOOLS = [
         },
     },
     {
+        "name": "compare_campaign_scenarios",
+        "description": (
+            "Compare baseline vs optimized campaign metrics and generate comparative chart blocks "
+            "(funnel_compare, bar_compare, projection) for the report UI"
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "baseline_name": {"type": "string"},
+                "projected_name": {"type": "string"},
+                "baseline_sent": {"type": "integer"},
+                "baseline_opened": {"type": "integer"},
+                "baseline_lp_visits": {"type": "integer"},
+                "baseline_hero_bounces": {"type": "integer"},
+                "baseline_scrolled": {"type": "integer"},
+                "baseline_leads": {"type": "number"},
+                "projected_sent": {"type": "integer"},
+                "projected_opened": {"type": "integer"},
+                "projected_lp_visits": {"type": "integer"},
+                "projected_hero_bounces": {"type": "integer"},
+                "projected_scrolled": {"type": "integer"},
+                "projected_leads": {"type": "number"},
+                "projected_leads_range": {"type": "array", "items": {"type": "number"}},
+                "scale_sent": {"type": "integer"},
+                "scale_leads": {"type": "number"},
+                "scale_leads_range": {"type": "array", "items": {"type": "number"}},
+            },
+            "required": ["baseline_sent"],
+        },
+    },
+    {
         "name": "parse_campaign_report",
         "description": "Parse pasted campaign report text and extract metrics",
         "parameters": {
@@ -359,6 +515,9 @@ def execute_marketing_tool(name: str, arguments: dict[str, Any], client_context:
 
     if name == "analyze_funnel":
         return analyze_funnel(**arguments)
+
+    if name == "compare_campaign_scenarios":
+        return compare_campaign_scenarios(**arguments)
 
     if name == "audit_email_copy":
         return audit_email_copy(**arguments)

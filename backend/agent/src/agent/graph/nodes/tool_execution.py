@@ -8,6 +8,11 @@ from langchain_core.messages import AIMessage
 from agent.graph.deps import NodeContext
 from agent.graph.state import AgentState
 from agent.llm.base import Message, Tool
+from agent.marketing.metrics_auto_detector import (
+    auto_detect_marketing_tool_results,
+    collect_marketing_context,
+    merge_tool_results,
+)
 from agent.tools.marketing_tools import (
     MARKETING_TOOLS,
     execute_marketing_tool,
@@ -53,6 +58,11 @@ async def tool_execution_node(state: AgentState, ctx: NodeContext) -> dict:
     )
     marketing_mode = state.get("agent_mode") == "marketing_consultant"
     tools = _marketing_tools_as_llm_tools() if marketing_mode else GENERAL_TOOLS
+    marketing_results: list[dict] = list(state.get("marketing_tool_results", []))
+
+    if marketing_mode:
+        auto_results = auto_detect_marketing_tool_results(collect_marketing_context(state))
+        marketing_results = merge_tool_results(marketing_results, auto_results)
 
     prompt = f"""You have collected information for goal: {state['goal']}
 Client: {state.get('client_id') or 'não definido'}
@@ -64,6 +74,7 @@ Attachments:
 
 Use the available tools when they help answer the goal. For marketing tasks:
 - parse_campaign_report or analyze_funnel when metrics are present
+- compare_campaign_scenarios when comparing baseline vs optimized campaigns (generates chart blocks)
 - audit_email_copy when email text is available
 - audit_landing_page when LP content is available
 - generate_prompt_package when asked to produce prompts for 1:1 generator
@@ -71,7 +82,6 @@ Use the available tools when they help answer the goal. For marketing tasks:
 
     response = await ctx.llm.chat([Message(role="user", content=prompt)], tools=tools)
     tool_outputs: list[dict] = []
-    marketing_results: list[dict] = list(state.get("marketing_tool_results", []))
     client_context = _client_raw_context(state)
 
     if response.tool_calls:
@@ -86,6 +96,8 @@ Use the available tools when they help answer the goal. For marketing tasks:
         content = f"Executed tools: {json.dumps(tool_outputs, ensure_ascii=False)[:4000]}"
     else:
         content = response.content
+        if marketing_mode and marketing_results:
+            content = f"Auto-detected metrics: {json.dumps(marketing_results, ensure_ascii=False)[:2000]}\n{content}"
 
     preview_content = content
     if tool_outputs:

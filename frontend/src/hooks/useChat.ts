@@ -177,19 +177,22 @@ export function useChat({
       setSending(true)
       setError(null)
 
+      const effectiveClientId = clientId ?? conversationClientId ?? undefined
+      const effectiveAgentMode = effectiveClientId ? 'marketing_consultant' : undefined
+
       try {
         const response =
           files.length > 0
             ? await runAgentWithFiles(text, files, {
                 conversation_id: conversationId,
-                client_id: clientId ?? undefined,
-                agent_mode: clientId ? 'marketing_consultant' : undefined,
+                client_id: effectiveClientId,
+                agent_mode: effectiveAgentMode,
               })
             : await runAgent({
                 goal: text,
                 conversation_id: conversationId,
-                client_id: clientId ?? undefined,
-                agent_mode: clientId ? 'marketing_consultant' : undefined,
+                client_id: effectiveClientId,
+                agent_mode: effectiveAgentMode,
               })
 
         setActiveExecutionId(response.execution_id)
@@ -212,7 +215,7 @@ export function useChat({
         setSending(false)
       }
     },
-    [clientId, conversationId, loadMessages, navigate, onConversationCreated, onMessagesUpdated],
+    [clientId, conversationClientId, conversationId, loadMessages, navigate, onConversationCreated, onMessagesUpdated],
   )
 
   const continueWithAnswer = useCallback(

@@ -7,6 +7,12 @@ from agent.graph.state import AgentState
 from agent.llm.base import Message
 from agent.marketing.intake import evaluate_intake
 from agent.marketing.persona import resolve_marketing_system_prompt
+from agent.marketing.report_formatter import merge_deliverable_with_visuals
+from agent.marketing.metrics_auto_detector import (
+    auto_detect_marketing_tool_results,
+    collect_marketing_context,
+    merge_tool_results,
+)
 
 _SECTION_HEADERS = ("DECISION:", "QUESTION:", "OPTIONS:", "SUMMARY:", "DELIVERABLE:")
 
@@ -77,7 +83,9 @@ async def critic_node(state: AgentState, ctx: NodeContext) -> dict:
         else "You are a critic evaluating an autonomous agent."
     )
     deliverable_hint = (
-        "estruture com: Diagnóstico, Hipóteses ranqueadas, Recomendações priorizadas, Entregáveis prontos"
+        "alertas críticos, hipóteses ranqueadas por impacto, recomendações priorizadas e próximos passos "
+        "(KPIs, funis comparativos e gráficos de taxas são injetados automaticamente quando há métricas — "
+        "nunca referencie 'gráficos acima' ou 'Gráfico 1/2/3' no DELIVERABLE)"
         if marketing_mode
         else "markdown table or format requested by the goal"
     )
@@ -101,7 +109,10 @@ Decide one of:
 
 When DECISION is DONE, you MUST include a DELIVERABLE section with the complete
 user-facing answer in the format requested by the goal (e.g. {deliverable_hint}).
-Do not only describe what was done — include the actual content.
+Do not repeat KPI cards or funnel charts in DELIVERABLE — they are added automatically from tool metrics.
+Do not use Mermaid diagrams or ASCII/emoji bar charts in DELIVERABLE.
+Do not reference "gráficos acima", "Gráfico 1", "Gráfico 2" or similar — visuals are injected automatically.
+Do not only describe what was done — include the actual narrative content.
 
 Format:
 DECISION: <DONE|CONTINUE|HUMAN>
@@ -159,14 +170,21 @@ SUMMARY: <brief summary of current progress>"""
         }
 
     if decision == "DONE":
+        final_deliverable = deliverable
+        if marketing_mode:
+            manual_results = list(state.get("marketing_tool_results", []))
+            auto_results = auto_detect_marketing_tool_results(collect_marketing_context(state))
+            merged_results = merge_tool_results(manual_results, auto_results)
+            final_deliverable = merge_deliverable_with_visuals(deliverable, merged_results)
+
         return {
             "current_step": "critic",
             "needs_human": False,
             "next_route": "end",
             "status": "Completed",
-            "result": deliverable,
+            "result": final_deliverable,
             "intake_complete": True,
-            "messages": [AIMessage(content=deliverable or f"[Critic] Completed.\n{text}")],
+            "messages": [AIMessage(content=final_deliverable or f"[Critic] Completed.\n{text}")],
             "activity_events": [
                 {
                     "step": "critic",
@@ -174,7 +192,7 @@ SUMMARY: <brief summary of current progress>"""
                     "title": "Tarefa concluída",
                     "summary": None,
                     "preview_type": "markdown",
-                    "preview_data": {"content": deliverable or text},
+                    "preview_data": {"content": final_deliverable or text},
                 }
             ],
         }

@@ -6,6 +6,7 @@ from agent.graph.conversation_context import format_conversation_history
 from agent.graph.deps import NodeContext
 from agent.graph.state import AgentState
 from agent.llm.base import Message
+from agent.marketing.metrics_auto_detector import collect_marketing_context, context_has_marketing_metrics
 from agent.marketing.persona import resolve_marketing_system_prompt
 
 
@@ -45,8 +46,10 @@ Memory context:
 {memory_snippets or 'None'}
 
 Create a concise plan for the next actions. If the conversation history already contains
-the information needed to answer the current goal, prefer using critic or tools instead of
+the information needed to answer the current goal, prefer using tools or critic instead of
 re-fetching the same website or repeating prior research.
+If the history contains funnel metrics, campaign numbers, or comparisons (envios, abertura, CTR, leads),
+use NEXT_ACTION: tools (not critic directly) so metrics are processed for automatic charts.
 
 Decide which capability to use next:
 - research: web search
@@ -67,6 +70,14 @@ Respond with a short plan and end with NEXT_ACTION: <action> where action is one
             if action in {"research", "browser", "tools", "memory", "critic"}:
                 next_action = action
             break
+
+    if (
+        state.get("agent_mode") == "marketing_consultant"
+        and next_action == "critic"
+        and not state.get("marketing_tool_results")
+        and context_has_marketing_metrics(collect_marketing_context(state))
+    ):
+        next_action = "tools"
 
     return {
         "plan": plan,
