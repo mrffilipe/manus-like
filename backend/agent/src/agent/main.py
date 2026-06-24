@@ -6,7 +6,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from agent.api.routes import agent
+from agent.api.routes import agent, clients
+from agent.api.routes import settings as settings_routes
 from agent.config import settings
 from agent.logging_config import setup_logging
 from agent.persistence.database import engine
@@ -32,6 +33,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(agent.router)
+app.include_router(clients.router)
+app.include_router(settings_routes.router)
 
 
 @app.get("/health")

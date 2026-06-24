@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.persistence.models import (
     AgentExecution,
+    ClientArtifact,
     Conversation,
     ExecutionActivity,
     ExecutionStatus,
@@ -25,16 +26,27 @@ class ExecutionRepository:
         goal: str,
         conversation_id: uuid.UUID | None = None,
         user_id: str | None = None,
+        *,
+        agent_mode: str | None = None,
+        client_id: str | None = None,
+        attachments: list | None = None,
     ) -> AgentExecution:
         if conversation_id is None:
-            conversation = Conversation(user_id=user_id, title=goal[:120])
+            conversation = Conversation(user_id=user_id, client_id=client_id, title=goal[:120])
             self.session.add(conversation)
             await self.session.flush()
             conversation_id = conversation.id
+        elif client_id is not None:
+            conversation = await self.get_conversation(conversation_id)
+            if conversation is not None and conversation.client_id is None:
+                conversation.client_id = client_id
 
         execution = AgentExecution(
             conversation_id=conversation_id,
             goal=goal,
+            agent_mode=agent_mode,
+            client_id=client_id,
+            attachments=attachments,
             status=ExecutionStatus.RUNNING.value,
             current_step="planner",
         )
@@ -367,3 +379,46 @@ class ExecutionRepository:
 
         await self.session.commit()
         return execution_id_strs
+
+    async def create_client_artifact(
+        self,
+        *,
+        client_id: str,
+        artifact_type: str,
+        title: str,
+        content: str,
+        conversation_id: uuid.UUID | None = None,
+        execution_id: uuid.UUID | None = None,
+        metadata: dict | None = None,
+    ) -> ClientArtifact:
+        artifact = ClientArtifact(
+            client_id=client_id,
+            conversation_id=conversation_id,
+            execution_id=execution_id,
+            artifact_type=artifact_type,
+            title=title,
+            content=content,
+            metadata_=metadata,
+        )
+        self.session.add(artifact)
+        await self.session.commit()
+        await self.session.refresh(artifact)
+        return artifact
+
+    async def list_client_artifacts(
+        self,
+        client_id: str,
+        *,
+        artifact_type: str | None = None,
+        limit: int = 20,
+    ) -> list[ClientArtifact]:
+        query = (
+            select(ClientArtifact)
+            .where(ClientArtifact.client_id == client_id)
+            .order_by(ClientArtifact.created_at.desc())
+            .limit(limit)
+        )
+        if artifact_type is not None:
+            query = query.where(ClientArtifact.artifact_type == artifact_type)
+        result = await self.session.execute(query)
+        return list(result.scalars().all())

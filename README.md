@@ -76,3 +76,13 @@ pytest tests/
 ```
 
 See child READMEs for detailed setup and API usage.
+
+## Reset dev environment
+
+To wipe all data (Postgres, Qdrant, Redis, client file uploads) and apply the single initial migration on a fresh database:
+
+```powershell
+.\scripts\reset-dev.ps1
+```
+
+This removes Docker volumes (`postgres_data`, `qdrant_data`, `client_files`), local `backend/agent/data/client-files` and `data/attachments` if present, then rebuilds and starts the stack. Clients are registered via the UI at `/clients` (no YAML seed).

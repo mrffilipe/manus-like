@@ -1,2 +1,5 @@
 export { ChatPage } from './ChatPage'
+export { ClientDetailPage } from './ClientDetailPage'
+export { ClientsPage } from './ClientsPage'
 export { NotFoundPage } from './NotFoundPage'
+export { SettingsPage } from './SettingsPage'

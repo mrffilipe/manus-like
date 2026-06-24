@@ -26,3 +26,10 @@ class AgentState(TypedDict):
     human_response: str | None
     result: str | None
     activity_events: Annotated[list[dict], operator.add]
+    agent_mode: Literal["general", "marketing_consultant"]
+    client_id: str | None
+    client_context: str
+    attachments: list[dict]
+    intake_complete: bool
+    marketing_tool_results: list[dict]
+    marketing_system_prompt: str

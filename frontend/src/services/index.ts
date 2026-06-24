@@ -1,3 +1,5 @@
-export { checkHealth, continueExecution, getExecutionActivity, getExecutionStatus, resumeExecution, runAgent } from './agentService'
+export { checkHealth, continueExecution, exportExecutionPdf, getExecutionActivity, getExecutionStatus, resumeExecution, runAgent, runAgentWithFiles } from './agentService'
+export { createClient, createResource, deleteClient, deleteResource, getClient, listClients, refreshResourceLink, updateClient, updateResource, uploadResourceFile } from './clientService'
 export { getConversationMessages, listConversations, deleteConversation } from './conversationService'
+export { getSettings, resetSettings, updateSettings } from './settingsService'
 export { apiPaths } from './httpPaths'

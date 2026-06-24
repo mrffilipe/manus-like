@@ -76,3 +76,13 @@ pytest tests/
 ```
 
 Consulte os READMEs filhos para detalhes de configuração e uso da API.
+
+## Reset do ambiente de desenvolvimento
+
+Para limpar todos os dados (Postgres, Qdrant, Redis, uploads de arquivos de cliente) e aplicar a migration inicial em banco vazio:
+
+```powershell
+.\scripts\reset-dev.ps1
+```
+
+O script remove os volumes Docker (`postgres_data`, `qdrant_data`, `client_files`), as pastas locais `backend/agent/data/client-files` e `data/attachments` se existirem, e sobe o stack novamente. Clientes são cadastrados pela UI em `/clients` (sem seed YAML).

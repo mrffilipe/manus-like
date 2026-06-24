@@ -30,7 +30,7 @@ export function ChatThread({
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, bottomPadding, pendingAssistantMessage])
+  }, [messages, pendingAssistantMessage])
 
   return (
     <GhostScrollBox

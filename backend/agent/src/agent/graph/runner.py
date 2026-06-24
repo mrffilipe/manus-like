@@ -15,6 +15,9 @@ from agent.graph.deps import NodeContext
 from agent.graph.state import AgentState
 from agent.llm.gemini import get_llm_provider
 from agent.logging_config import get_logger
+from agent.marketing.agent_settings_service import AgentSettingsService
+from agent.marketing.client_service import ClientService
+from agent.marketing.persona import build_client_context_prompt
 from agent.persistence.checkpoint import checkpoint_manager
 from agent.persistence.models import ExecutionStatus
 from agent.persistence.repository import ExecutionRepository
@@ -41,6 +44,11 @@ class GraphRunner:
         *,
         prior_messages: list | None = None,
         conversation_id: str | None = None,
+        agent_mode: str = "general",
+        client_id: str | None = None,
+        attachments: list | None = None,
+        client_context: str = "",
+        marketing_system_prompt: str = "",
     ) -> AgentState:
         history = list(prior_messages or [])
         return AgentState(
@@ -63,6 +71,13 @@ class GraphRunner:
             human_response=None,
             result=None,
             activity_events=[],
+            agent_mode=agent_mode,  # type: ignore[typeddict-item]
+            client_id=client_id,
+            client_context=client_context,
+            attachments=list(attachments or []),
+            intake_complete=False,
+            marketing_tool_results=[],
+            marketing_system_prompt=marketing_system_prompt,
         )
 
     def _config(self, execution_id: str) -> dict:
@@ -143,6 +158,37 @@ class GraphRunner:
                         execution_id,
                     )
 
+                client_context = ""
+                merged_attachments = list(execution.attachments or [])
+                resolved_client_id = execution.client_id
+                marketing_system_prompt = ""
+
+                agent_mode = execution.agent_mode or "general"
+                if agent_mode == "marketing_consultant":
+                    settings_service = AgentSettingsService(repo.session)
+                    marketing_system_prompt = await settings_service.get_marketing_system_prompt()
+
+                if execution.client_id:
+                    client_service = ClientService(repo.session)
+                    resolved = await client_service.resolve_client_id(execution.client_id)
+                    if resolved is not None:
+                        resolved_client_id = str(resolved)
+                        context_text, resource_attachments, link_count = (
+                            await client_service.prepare_execution_context(resolved, scrape_links=True)
+                        )
+                        client_config = await client_service.build_client_config(resolved)
+                        persona_ctx = build_client_context_prompt(client_config)
+                        client_context = f"{persona_ctx}\n{context_text}".strip() if context_text else persona_ctx
+                        merged_attachments = merged_attachments + resource_attachments
+                        await recorder.record(
+                            step="client_context",
+                            kind="step_done",
+                            title="Contexto do cliente carregado",
+                            summary=f"{len(resource_attachments)} recursos, {link_count} links",
+                            preview_type="markdown",
+                            preview_data={"content": context_text[:3000] if context_text else "Sem contexto"},
+                        )
+
                 await recorder.record(
                     step="planner",
                     kind="step_start",
@@ -160,6 +206,11 @@ class GraphRunner:
                         goal,
                         prior_messages=prior_messages,
                         conversation_id=conversation_id,
+                        agent_mode=agent_mode,
+                        client_id=resolved_client_id,
+                        attachments=merged_attachments,
+                        client_context=client_context,
+                        marketing_system_prompt=marketing_system_prompt,
                     ),
                     config,
                 )
@@ -214,6 +265,18 @@ class GraphRunner:
             if not assistant_content and state.get("messages"):
                 last = state["messages"][-1]
                 assistant_content = last.content if hasattr(last, "content") else str(last)
+
+            if state.get("client_id") and assistant_content:
+                await repo.create_client_artifact(
+                    client_id=state["client_id"],
+                    artifact_type="deliverable",
+                    title=state.get("goal", "Entregável")[:120],
+                    content=assistant_content,
+                    conversation_id=uuid.UUID(state["conversation_id"])
+                    if state.get("conversation_id")
+                    else None,
+                    execution_id=execution_id,
+                )
 
         await repo.finalize_execution(
             execution_id,

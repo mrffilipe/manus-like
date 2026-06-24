@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { continueExecution, getExecutionStatus, runAgent } from '../services'
+import { continueExecution, getExecutionStatus, runAgent, runAgentWithFiles } from '../services'
 import { getConversationMessages } from '../services/conversationService'
 import type { AgentStatusResponse, ChatMessage, ExecutionStatus } from '../types'
 import { getApiErrorMessage } from '../utils/apiError'
@@ -10,6 +10,7 @@ const ACTIVE_STATUSES = new Set<ExecutionStatus>(['Running', 'WaitingHumanInput'
 
 interface UseChatOptions {
   conversationId?: string
+  clientId?: string | null
   onConversationCreated?: (conversationId: string) => void
   onMessagesUpdated?: () => void
 }
@@ -37,11 +38,13 @@ function sleep(ms: number): Promise<void> {
 
 export function useChat({
   conversationId,
+  clientId,
   onConversationCreated,
   onMessagesUpdated,
 }: UseChatOptions) {
   const navigate = useNavigate()
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [conversationClientId, setConversationClientId] = useState<string | null>(null)
   const [loading, setLoading] = useState(Boolean(conversationId))
   const [error, setError] = useState<string | null>(null)
   const [activeExecutionId, setActiveExecutionId] = useState<string | null>(null)
@@ -52,6 +55,7 @@ export function useChat({
   const loadMessages = useCallback(async (silent = false): Promise<ChatMessage[]> => {
     if (!conversationId) {
       setMessages([])
+      setConversationClientId(null)
       setLoading(false)
       return []
     }
@@ -62,6 +66,7 @@ export function useChat({
     try {
       const response = await getConversationMessages(conversationId)
       setMessages(response.messages)
+      setConversationClientId(response.client_id)
       setError(null)
 
       const latestExecutionId = findLatestExecutionId(response.messages)
@@ -168,15 +173,24 @@ export function useChat({
   }, [activeExecutionId, loadMessages, onMessagesUpdated])
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, files: File[] = []) => {
       setSending(true)
       setError(null)
 
       try {
-        const response = await runAgent({
-          goal: text,
-          conversation_id: conversationId,
-        })
+        const response =
+          files.length > 0
+            ? await runAgentWithFiles(text, files, {
+                conversation_id: conversationId,
+                client_id: clientId ?? undefined,
+                agent_mode: clientId ? 'marketing_consultant' : undefined,
+              })
+            : await runAgent({
+                goal: text,
+                conversation_id: conversationId,
+                client_id: clientId ?? undefined,
+                agent_mode: clientId ? 'marketing_consultant' : undefined,
+              })
 
         setActiveExecutionId(response.execution_id)
         activeExecutionRef.current = response.execution_id
@@ -198,7 +212,7 @@ export function useChat({
         setSending(false)
       }
     },
-    [conversationId, loadMessages, navigate, onConversationCreated, onMessagesUpdated],
+    [clientId, conversationId, loadMessages, navigate, onConversationCreated, onMessagesUpdated],
   )
 
   const continueWithAnswer = useCallback(
@@ -233,6 +247,7 @@ export function useChat({
 
   return {
     messages,
+    conversationClientId,
     loading,
     error,
     sending,

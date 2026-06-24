@@ -3,6 +3,25 @@ import { chat } from './tokens'
 
 type StyleFn = (theme: Theme) => Record<string, unknown>
 
+export function sidebarNavButtonSx(active: boolean): StyleFn {
+  return (theme) => ({
+    justifyContent: 'flex-start',
+    px: 1.5,
+    py: 1,
+    borderRadius: 2,
+    color: 'text.primary',
+    fontWeight: 500,
+    minWidth: 0,
+    overflow: 'hidden',
+    transition: 'background-color 0.15s ease',
+    '& .MuiButton-startIcon': { flexShrink: 0 },
+    '&:hover': { bgcolor: 'action.hover' },
+    ...(active && {
+      bgcolor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.12 : 0.08),
+    }),
+  })
+}
+
 export function sidebarItemSx(active: boolean): StyleFn {
   return (theme) => ({
     borderRadius: `${chat.sidebarItemRadius}px`,

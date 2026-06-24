@@ -6,7 +6,7 @@ import { ChatComposer } from './ChatComposer'
 import type { ActivityEvent } from '../../types'
 
 interface ChatFooterProps {
-  onSend: (text: string) => Promise<void>
+  onSend: (text: string, files?: File[]) => Promise<void>
   composerDisabled?: boolean
   composerPlaceholder?: string
   showActivity?: boolean
@@ -16,6 +16,7 @@ interface ChatFooterProps {
   isRunning?: boolean
   overlay?: boolean
   onHeightChange?: (height: number) => void
+  lockedClientName?: string | null
 }
 
 const footerColumnSx = {
@@ -36,6 +37,7 @@ export function ChatFooter({
   isRunning = false,
   overlay = true,
   onHeightChange,
+  lockedClientName,
 }: ChatFooterProps) {
   const footerRef = useRef<HTMLDivElement>(null)
 
@@ -85,6 +87,7 @@ export function ChatFooter({
         onSend={onSend}
         disabled={composerDisabled}
         placeholder={composerPlaceholder}
+        lockedClientName={lockedClientName}
       />
     </Box>
   )

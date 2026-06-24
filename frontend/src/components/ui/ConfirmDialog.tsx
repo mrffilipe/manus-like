@@ -8,6 +8,7 @@ import {
   type ButtonProps,
 } from '@mui/material'
 import { BackButton } from './BackButton'
+import { standardDialogProps } from '../../theme/dialogStyles'
 
 interface ConfirmDialogProps {
   open: boolean
@@ -33,7 +34,7 @@ export function ConfirmDialog({
   loading = false,
 }: ConfirmDialogProps) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth scroll="paper">
+    <Dialog open={open} onClose={onClose} {...standardDialogProps}>
       <DialogTitle sx={{ pb: 1 }}>{title}</DialogTitle>
       <DialogContent sx={{ px: 3, pt: 0, pb: 2.5 }}>
         <Typography variant="body2" color="text.secondary">

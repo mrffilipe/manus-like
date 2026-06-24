@@ -5,6 +5,8 @@ from langchain_core.messages import AIMessage
 from agent.graph.deps import NodeContext
 from agent.graph.state import AgentState
 from agent.llm.base import Message
+from agent.marketing.intake import evaluate_intake
+from agent.marketing.persona import resolve_marketing_system_prompt
 
 _SECTION_HEADERS = ("DECISION:", "QUESTION:", "OPTIONS:", "SUMMARY:", "DELIVERABLE:")
 
@@ -32,25 +34,73 @@ def _parse_deliverable(text: str) -> str | None:
     return deliverable or None
 
 
-async def critic_node(state: AgentState, ctx: NodeContext) -> dict:
-    context = "\n".join(
+def _messages_text(state: AgentState) -> str:
+    return "\n".join(
         msg.content for msg in state.get("messages", []) if hasattr(msg, "content")
     )
-    prompt = f"""You are a critic evaluating an autonomous agent.
+
+
+async def critic_node(state: AgentState, ctx: NodeContext) -> dict:
+    context = _messages_text(state)
+    marketing_mode = state.get("agent_mode") == "marketing_consultant"
+    intake_section = ""
+    force_human = False
+    forced_question: str | None = None
+    forced_options: list[str] | None = None
+
+    if marketing_mode:
+        intake = evaluate_intake(
+            goal=state["goal"],
+            messages_text=context,
+            attachments=state.get("attachments", []),
+            client_id=state.get("client_id"),
+        )
+        if not intake.complete and intake.next_question:
+            force_human = True
+            forced_question = intake.next_question
+            forced_options = intake.next_options
+            intake_section = (
+                f"\nIntake incompleto. Itens faltando: {', '.join(intake.missing) or intake.next_key}.\n"
+                "Se faltar contexto crítico, use DECISION: HUMAN para solicitar dados antes de concluir.\n"
+            )
+
+    tool_results = state.get("marketing_tool_results", [])
+    tool_section = ""
+    if tool_results:
+        tool_section = "\nResultados de ferramentas de marketing:\n" + "\n".join(
+            str(item) for item in tool_results[-5:]
+        )
+
+    persona = (
+        resolve_marketing_system_prompt(state.get("marketing_system_prompt"))
+        if marketing_mode
+        else "You are a critic evaluating an autonomous agent."
+    )
+    deliverable_hint = (
+        "estruture com: Diagnóstico, Hipóteses ranqueadas, Recomendações priorizadas, Entregáveis prontos"
+        if marketing_mode
+        else "markdown table or format requested by the goal"
+    )
+
+    prompt = f"""{persona}
 
 Goal: {state['goal']}
+Client: {state.get('client_id') or 'não definido'}
 Iteration: {state.get('iteration', 0)}
 Max iterations: 10
+{state.get('client_context', '')}
+{intake_section}
 Work so far:
 {context}
+{tool_section}
 
 Decide one of:
-- DONE: goal is sufficiently addressed
+- DONE: goal is sufficiently addressed (only if intake is complete for marketing tasks)
 - CONTINUE: more work needed
-- HUMAN: critical ambiguity requires human input (provide question and options)
+- HUMAN: critical ambiguity or missing data requires human input (provide question and options)
 
 When DECISION is DONE, you MUST include a DELIVERABLE section with the complete
-user-facing answer in the format requested by the goal (e.g. markdown table).
+user-facing answer in the format requested by the goal (e.g. {deliverable_hint}).
 Do not only describe what was done — include the actual content.
 
 Format:
@@ -78,6 +128,11 @@ SUMMARY: <brief summary of current progress>"""
             raw = line.split(":", 1)[1].strip()
             options = [o.strip() for o in raw.split(",") if o.strip()]
 
+    if marketing_mode and force_human and decision == "DONE" and not deliverable:
+        decision = "HUMAN"
+        question = forced_question
+        options = forced_options
+
     if state.get("iteration", 0) >= 10:
         decision = "DONE"
 
@@ -89,6 +144,7 @@ SUMMARY: <brief summary of current progress>"""
             "pending_options": options,
             "next_route": "human",
             "status": "WaitingHumanInput",
+            "intake_complete": False,
             "messages": [AIMessage(content=f"[Critic] Needs human input: {question}")],
             "activity_events": [
                 {
@@ -109,6 +165,7 @@ SUMMARY: <brief summary of current progress>"""
             "next_route": "end",
             "status": "Completed",
             "result": deliverable,
+            "intake_complete": True,
             "messages": [AIMessage(content=deliverable or f"[Critic] Completed.\n{text}")],
             "activity_events": [
                 {

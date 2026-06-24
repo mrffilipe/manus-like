@@ -37,6 +37,7 @@ class MemoryClient:
         execution_id: str,
         conversation_id: str | None = None,
         user_id: str | None = None,
+        client_id: str | None = None,
         memory_type: str = "fact",
     ) -> None:
         embeddings = await self.llm.embed([content])
@@ -52,6 +53,8 @@ class MemoryClient:
         }
         if conversation_id is not None:
             payload["conversation_id"] = conversation_id
+        if client_id is not None:
+            payload["client_id"] = client_id
         point = PointStruct(
             id=str(uuid.uuid4()),
             vector=embeddings[0],
@@ -65,6 +68,7 @@ class MemoryClient:
         *,
         execution_id: str | None = None,
         conversation_id: str | None = None,
+        client_id: str | None = None,
         execution_ids: list[str] | None = None,
         limit: int = 5,
     ) -> list[dict[str, Any]]:
@@ -74,7 +78,11 @@ class MemoryClient:
         await self.ensure_collection(len(embeddings[0]))
 
         query_filter = None
-        if execution_ids:
+        if client_id:
+            query_filter = Filter(
+                must=[FieldCondition(key="client_id", match=MatchValue(value=client_id))]
+            )
+        elif execution_ids:
             query_filter = Filter(
                 should=[FieldCondition(key="execution_id", match=MatchAny(any=execution_ids))]
             )

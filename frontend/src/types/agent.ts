@@ -1,5 +1,7 @@
 export type ExecutionStatus = 'Running' | 'WaitingHumanInput' | 'Completed' | 'Failed'
 
+export type AgentMode = 'general' | 'marketing_consultant'
+
 export type ActivityKind = 'step_start' | 'step_done' | 'preview' | 'error'
 
 export type ActivityPreviewType = 'text' | 'markdown' | 'search_results' | 'webpage' | 'screenshot'
@@ -21,10 +23,19 @@ export interface ActivityListResponse {
   activities: ActivityEvent[]
 }
 
+export interface AttachmentInput {
+  filename: string
+  extracted_text: string
+  content_type?: string
+}
+
 export interface RunAgentRequest {
   goal: string
   user_id?: string
   conversation_id?: string
+  client_id?: string
+  agent_mode?: AgentMode
+  attachments?: AttachmentInput[]
 }
 
 export interface RunAgentResponse {
@@ -43,6 +54,8 @@ export interface AgentStatusResponse {
   status: ExecutionStatus
   current_step: string | null
   goal: string
+  client_id: string | null
+  agent_mode: string | null
   question: string | null
   options: string[] | null
   error_message: string | null
@@ -52,6 +65,7 @@ export interface AgentStatusResponse {
 export interface ConversationSummary {
   id: string
   title: string | null
+  client_id: string | null
   updated_at: string
   last_message_preview: string | null
 }
@@ -70,6 +84,7 @@ export interface ChatMessage {
 
 export interface ConversationMessagesResponse {
   conversation_id: string
+  client_id: string | null
   messages: ChatMessage[]
 }
 
@@ -78,4 +93,90 @@ export interface StoredExecution {
   goal: string
   status: ExecutionStatus
   created_at: string
+}
+
+export interface ClientSummary {
+  id: string
+  slug: string
+  name: string
+  product: string
+  description: string
+  resource_count: number
+  is_active: boolean
+}
+
+export interface ClientListResponse {
+  clients: ClientSummary[]
+}
+
+export interface ClientResource {
+  id: string
+  client_id: string
+  resource_type: 'file' | 'link' | 'prompt' | 'text'
+  category: string | null
+  title: string
+  content: string | null
+  url: string | null
+  extracted_text: string | null
+  scraped_at: string | null
+  metadata: Record<string, unknown> | null
+  sort_order: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientDetail {
+  id: string
+  slug: string
+  name: string
+  product: string
+  description: string
+  profile: Record<string, unknown> | null
+  is_active: boolean
+  resources: ClientResource[]
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateClientPayload {
+  name: string
+  product: string
+  description?: string
+  slug?: string
+  profile?: Record<string, unknown>
+}
+
+export interface UpdateClientPayload {
+  name?: string
+  product?: string
+  description?: string
+  slug?: string
+  profile?: Record<string, unknown>
+  is_active?: boolean
+}
+
+export interface CreateResourcePayload {
+  resource_type: 'link' | 'prompt' | 'text'
+  title: string
+  category?: string
+  content?: string
+  url?: string
+  metadata?: Record<string, unknown>
+}
+
+export interface UpdateResourcePayload {
+  title?: string
+  category?: string
+  content?: string
+  url?: string
+  metadata?: Record<string, unknown>
+  sort_order?: number
+}
+
+export interface AgentSettings {
+  marketing_system_prompt: string
+}
+
+export interface UpdateAgentSettingsPayload {
+  marketing_system_prompt: string
 }

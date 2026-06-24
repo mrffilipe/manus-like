@@ -1,7 +1,9 @@
 import AddIcon from '@mui/icons-material/Add'
+import BusinessOutlinedIcon from '@mui/icons-material/BusinessOutlined'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz'
+import SettingsOutlinedIcon from '@mui/icons-material/SettingsOutlined'
 import {
   Box,
   Button,
@@ -22,7 +24,7 @@ import { ConfirmDialog, GhostScrollBox } from '../ui'
 import { deleteConversation } from '../../services/conversationService'
 import type { ConversationSummary } from '../../types'
 import { getApiErrorMessage } from '../../utils/apiError'
-import { sidebarItemSx } from '../../theme/chatStyles'
+import { sidebarItemSx, sidebarNavButtonSx } from '../../theme/chatStyles'
 
 interface ConversationsDrawerProps {
   conversations: ConversationSummary[]
@@ -102,10 +104,10 @@ export function ConversationsDrawer({
   }
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', overflowX: 'hidden', minWidth: 0 }}>
       {headerSlot}
 
-      <Box sx={{ px: 1.5, py: 1.5 }}>
+      <Box sx={{ px: 1.5, py: 1.5, display: 'flex', flexDirection: 'column', gap: 0.5 }}>
         <Button
           component={Link}
           to="/"
@@ -113,17 +115,37 @@ export function ConversationsDrawer({
           fullWidth
           startIcon={<AddIcon sx={{ fontSize: 18 }} />}
           onClick={onNavigate}
-          sx={{
-            justifyContent: 'flex-start',
-            px: 1.5,
-            py: 1,
-            borderRadius: 2,
-            color: 'text.primary',
-            fontWeight: 500,
-            '&:hover': { bgcolor: 'action.hover' },
-          }}
+          sx={sidebarNavButtonSx(location.pathname === '/' || location.pathname.startsWith('/c/'))}
         >
-          Nova conversa
+          <Typography component="span" noWrap sx={{ fontSize: 'inherit', fontWeight: 'inherit' }}>
+            Nova conversa
+          </Typography>
+        </Button>
+        <Button
+          component={Link}
+          to="/clients"
+          variant="text"
+          fullWidth
+          startIcon={<BusinessOutlinedIcon sx={{ fontSize: 18 }} />}
+          onClick={onNavigate}
+          sx={sidebarNavButtonSx(location.pathname.startsWith('/clients'))}
+        >
+          <Typography component="span" noWrap sx={{ fontSize: 'inherit', fontWeight: 'inherit' }}>
+            Clientes
+          </Typography>
+        </Button>
+        <Button
+          component={Link}
+          to="/settings"
+          variant="text"
+          fullWidth
+          startIcon={<SettingsOutlinedIcon sx={{ fontSize: 18 }} />}
+          onClick={onNavigate}
+          sx={sidebarNavButtonSx(location.pathname.startsWith('/settings'))}
+        >
+          <Typography component="span" noWrap sx={{ fontSize: 'inherit', fontWeight: 'inherit' }}>
+            Configurações
+          </Typography>
         </Button>
       </Box>
 
@@ -134,7 +156,7 @@ export function ConversationsDrawer({
         Conversas
       </Typography>
 
-      <GhostScrollBox sx={{ flex: 1, overflow: 'auto', pb: 2 }}>
+      <GhostScrollBox sx={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', pb: 2 }}>
         {loading && conversations.length === 0 ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress size={22} />
@@ -162,6 +184,8 @@ export function ConversationsDrawer({
                   sidebarItemSx(active),
                   {
                     position: 'relative',
+                    minWidth: 0,
+                    overflow: 'hidden',
                     '&:hover .conversation-menu-btn': { opacity: 1 },
                   },
                 ]}
@@ -171,6 +195,7 @@ export function ConversationsDrawer({
                 </ListItemIcon>
                 <ListItemText
                   primary={conversationLabel(conversation)}
+                  sx={{ minWidth: 0, flex: '1 1 auto' }}
                   slotProps={{
                     primary: { noWrap: true, sx: { fontSize: '0.875rem', fontWeight: active ? 500 : 400, pr: 3 } },
                   }}

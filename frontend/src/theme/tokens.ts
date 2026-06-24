@@ -5,14 +5,16 @@
 export const layout = {
   sidebarWidth: 320,
   contentMaxWidth: 1200,
+  pageMaxWidth: 800,
+  dialogMaxWidth: 480,
   authMaxWidth: 440,
   bootstrapMaxWidth: 560,
   appBarHeight: 52,
 } as const
 
 export const chat = {
-  threadMaxWidth: 760,
-  composerMaxWidth: 720,
+  threadMaxWidth: layout.pageMaxWidth,
+  composerMaxWidth: layout.pageMaxWidth,
   sidebarItemRadius: 10,
   composerRadius: 20,
   messageGap: 3,

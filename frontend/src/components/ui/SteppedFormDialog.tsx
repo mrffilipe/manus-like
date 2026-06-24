@@ -1,9 +1,10 @@
-import { Button, Dialog, DialogContent, DialogTitle, Stack, Typography, type DialogProps } from '@mui/material'
+import { Button, Dialog, DialogContent, DialogTitle, Stack, Typography } from '@mui/material'
 import type { FormEvent, PropsWithChildren, ReactNode } from 'react'
 import { FormStepper } from './FormStepper'
 import { BackButton } from './BackButton'
 import { FormActions } from './FormActions'
 import { formSpacing } from '../../theme/tokens'
+import { standardDialogProps } from '../../theme/dialogStyles'
 
 interface SteppedFormDialogProps extends PropsWithChildren {
   open: boolean
@@ -12,7 +13,6 @@ interface SteppedFormDialogProps extends PropsWithChildren {
   description?: string
   steps: readonly string[]
   activeStep: number
-  maxWidth?: DialogProps['maxWidth']
   loading?: boolean
   submitLabel?: string
   onBack: () => void
@@ -30,7 +30,6 @@ export function SteppedFormDialog({
   description,
   steps,
   activeStep,
-  maxWidth = 'sm',
   loading = false,
   submitLabel = 'Concluir',
   onBack,
@@ -62,7 +61,7 @@ export function SteppedFormDialog({
   }
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth={maxWidth} fullWidth scroll="paper">
+    <Dialog open={open} onClose={onClose} {...standardDialogProps}>
       <DialogTitle sx={{ pb: description ? 0.5 : 1 }}>{title}</DialogTitle>
       {description ? (
         <Typography variant="body2" color="text.secondary" sx={{ px: 3, pb: 1 }}>

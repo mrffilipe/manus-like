@@ -5,19 +5,18 @@ import {
   DialogTitle,
   Stack,
   Typography,
-  type DialogProps,
 } from '@mui/material'
 import type { FormEvent, PropsWithChildren, ReactNode } from 'react'
 import { BackButton } from './BackButton'
 import { FormActions } from './FormActions'
 import { formSpacing } from '../../theme/tokens'
+import { standardDialogProps } from '../../theme/dialogStyles'
 
 interface ResourceDialogProps extends PropsWithChildren {
   open: boolean
   onClose: () => void
   title: string
   description?: string
-  maxWidth?: DialogProps['maxWidth']
   loading?: boolean
   submitLabel?: string
   cancelLabel?: string
@@ -31,7 +30,6 @@ export function ResourceDialog({
   onClose,
   title,
   description,
-  maxWidth = 'sm',
   loading = false,
   submitLabel = 'Salvar',
   cancelLabel = 'Cancelar',
@@ -41,7 +39,7 @@ export function ResourceDialog({
   children,
 }: ResourceDialogProps) {
   return (
-    <Dialog open={open} onClose={onClose} maxWidth={maxWidth} fullWidth scroll="paper">
+    <Dialog open={open} onClose={onClose} {...standardDialogProps}>
       <DialogTitle sx={{ pb: description ? 0.5 : 1 }}>{title}</DialogTitle>
       {description ? (
         <Typography variant="body2" color="text.secondary" sx={{ px: 3, pb: 1 }}>

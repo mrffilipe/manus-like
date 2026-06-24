@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     max_graph_iterations: int = 10
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
+    attachments_dir: str = "data/attachments"
+    client_files_dir: str = "data/client-files"
+    default_agent_mode: str = "general"
 
     @property
     def database_url_sync(self) -> str:

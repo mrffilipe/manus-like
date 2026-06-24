@@ -4,8 +4,8 @@ import asyncio
 import json
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agent.api.schemas import (
@@ -20,12 +20,15 @@ from agent.api.schemas import (
     MessageResponse,
     RunAgentRequest,
     RunAgentResponse,
+    UploadAttachmentResponse,
 )
+from agent.export.pdf_export import markdown_to_pdf_bytes
 from agent.llm.gemini import get_llm_provider
 from agent.persistence.database import get_session
 from agent.persistence.models import ExecutionActivity, ExecutionStatus
 from agent.persistence.repository import ExecutionRepository
 from agent.queue.redis_queue import EVENTS_PREFIX, AgentJob, JobType, RedisQueue
+from agent.tools.file_extractor import extract_text_from_bytes
 from agent.tools.memory_client import MemoryClient
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -55,6 +58,76 @@ def _activity_to_response(activity: ExecutionActivity) -> ActivityEventResponse:
     )
 
 
+def _resolve_agent_mode(body: RunAgentRequest) -> str:
+    if body.agent_mode:
+        return body.agent_mode
+    if body.client_id:
+        return "marketing_consultant"
+    return "general"
+
+
+def _attachments_payload(body: RunAgentRequest) -> list[dict] | None:
+    if not body.attachments:
+        return None
+    return [attachment.model_dump() for attachment in body.attachments]
+
+
+async def _enqueue_execution(
+    *,
+    goal: str,
+    repo: ExecutionRepository,
+    queue: RedisQueue,
+    conversation_id: uuid.UUID | None = None,
+    user_id: str | None = None,
+    client_id: str | None = None,
+    agent_mode: str = "general",
+    attachments: list[dict] | None = None,
+) -> RunAgentResponse:
+    execution = await repo.create_execution(
+        goal=goal,
+        conversation_id=conversation_id,
+        user_id=user_id,
+        agent_mode=agent_mode,
+        client_id=client_id,
+        attachments=attachments,
+    )
+    await queue.enqueue(AgentJob(execution_id=str(execution.id), job_type=JobType.RUN))
+    return RunAgentResponse(
+        execution_id=execution.id,
+        conversation_id=execution.conversation_id,
+        status="Running",
+    )
+
+
+@router.post("/attachments", response_model=list[UploadAttachmentResponse])
+async def upload_attachments(
+    files: list[UploadFile] = File(...),
+) -> list[UploadAttachmentResponse]:
+    if not files:
+        raise HTTPException(status_code=400, detail="No files provided")
+
+    results: list[UploadAttachmentResponse] = []
+    for upload in files:
+        content = await upload.read()
+        if not upload.filename:
+            continue
+        try:
+            extracted = extract_text_from_bytes(upload.filename, content)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        text = extracted.get("extracted_text", "")
+        results.append(
+            UploadAttachmentResponse(
+                filename=upload.filename,
+                extracted_text=text,
+                content_type=extracted.get("content_type"),
+                char_count=len(text),
+            )
+        )
+    return results
+
+
 @router.post("/run", response_model=RunAgentResponse)
 async def run_agent(
     body: RunAgentRequest,
@@ -62,16 +135,51 @@ async def run_agent(
     queue: RedisQueue = Depends(get_queue),
 ) -> RunAgentResponse:
     repo = ExecutionRepository(session)
-    execution = await repo.create_execution(
+    return await _enqueue_execution(
         goal=body.goal,
+        repo=repo,
+        queue=queue,
         conversation_id=body.conversation_id,
         user_id=body.user_id,
+        client_id=body.client_id,
+        agent_mode=_resolve_agent_mode(body),
+        attachments=_attachments_payload(body),
     )
-    await queue.enqueue(AgentJob(execution_id=str(execution.id), job_type=JobType.RUN))
-    return RunAgentResponse(
-        execution_id=execution.id,
-        conversation_id=execution.conversation_id,
-        status="Running",
+
+
+@router.post("/run/upload", response_model=RunAgentResponse)
+async def run_agent_with_upload(
+    goal: str = Form(...),
+    conversation_id: uuid.UUID | None = Form(default=None),
+    user_id: str | None = Form(default=None),
+    client_id: str | None = Form(default=None),
+    agent_mode: str | None = Form(default=None),
+    files: list[UploadFile] = File(default=[]),
+    session: AsyncSession = Depends(get_session),
+    queue: RedisQueue = Depends(get_queue),
+) -> RunAgentResponse:
+    repo = ExecutionRepository(session)
+    attachments: list[dict] = []
+    for upload in files:
+        content = await upload.read()
+        if not upload.filename:
+            continue
+        try:
+            extracted = extract_text_from_bytes(upload.filename, content)
+            attachments.append(extracted)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    resolved_mode = agent_mode or ("marketing_consultant" if client_id else "general")
+    return await _enqueue_execution(
+        goal=goal,
+        repo=repo,
+        queue=queue,
+        conversation_id=conversation_id,
+        user_id=user_id,
+        client_id=client_id,
+        agent_mode=resolved_mode,
+        attachments=attachments or None,
     )
 
 
@@ -88,6 +196,7 @@ async def list_conversations(
             ConversationSummary(
                 id=conversation.id,
                 title=conversation.title,
+                client_id=conversation.client_id,
                 updated_at=conversation.updated_at,
                 last_message_preview=(
                     preview[:120] + "…" if preview and len(preview) > 120 else preview
@@ -111,6 +220,7 @@ async def get_conversation_messages(
     messages = await repo.get_conversation_messages(conversation_id)
     return ConversationMessagesResponse(
         conversation_id=conversation_id,
+        client_id=conversation.client_id,
         messages=[
             MessageResponse(
                 id=message.id,
@@ -167,10 +277,42 @@ async def get_status(
         status=execution.status,
         current_step=execution.current_step,
         goal=execution.goal,
+        client_id=execution.client_id,
+        agent_mode=execution.agent_mode,
         question=execution.pending_question if execution.status == ExecutionStatus.WAITING_HUMAN_INPUT.value else None,
         options=execution.pending_options if execution.status == ExecutionStatus.WAITING_HUMAN_INPUT.value else None,
         error_message=execution.error_message,
         result=result,
+    )
+
+
+@router.get("/export/{execution_id}/pdf")
+async def export_execution_pdf(
+    execution_id: uuid.UUID,
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    repo = ExecutionRepository(session)
+    execution = await repo.get_execution(execution_id)
+    if execution is None:
+        raise HTTPException(status_code=404, detail="Execution not found")
+
+    content = execution.result
+    if not content:
+        messages = await repo.get_messages(execution_id)
+        assistant_messages = [message for message in messages if message.role == "assistant"]
+        if assistant_messages:
+            content = assistant_messages[-1].content
+
+    if not content:
+        raise HTTPException(status_code=400, detail="No deliverable available for export")
+
+    title = execution.goal[:80] if execution.goal else "Relatório"
+    pdf_bytes = markdown_to_pdf_bytes(content, title=title)
+    filename = f"relatorio-{execution_id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

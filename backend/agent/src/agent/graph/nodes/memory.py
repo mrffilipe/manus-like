@@ -11,10 +11,12 @@ async def memory_node(state: AgentState, ctx: NodeContext) -> dict:
     assert ctx.memory is not None
 
     conversation_id = state.get("conversation_id")
+    client_id = state.get("client_id")
     recalled = await ctx.memory.search(
         state["goal"],
-        execution_id=state["execution_id"] if not conversation_id else None,
+        execution_id=state["execution_id"] if not conversation_id and not client_id else None,
         conversation_id=conversation_id,
+        client_id=client_id,
         limit=5,
     )
     memory_context = [item["content"] for item in recalled if item.get("content")]
@@ -37,6 +39,7 @@ Reply with one fact per line, or 'none' if nothing worth storing."""
                 fact,
                 execution_id=state["execution_id"],
                 conversation_id=conversation_id,
+                client_id=client_id,
                 memory_type="fact",
             )
             stored.append(fact)
