@@ -1,6 +1,6 @@
 # Manus-like — Sistema de Agente Autônomo
 
-Monorepo para um agente autônomo containerizado com interface React e serviços Python no backend.
+Monorepo para um agente autônomo containerizado com interface React em chat e serviços Python no backend. O fluxo principal é um **consultor de marketing B2B**: conversa com contexto de cliente, intake estruturado, ferramentas de domínio e gráficos interativos embutidos em relatórios markdown.
 
 ## Estrutura do repositório
 
@@ -42,12 +42,13 @@ docker compose up --build
 
 | Serviço | Porta | Descrição |
 |---------|-------|-----------|
-| `frontend` | 3000 | Interface React |
-| `agent-api` | 8000 | API REST do agente |
+| `frontend` | 3000 | Chat React (clientes, settings, gráficos markdown) |
+| `agent-api` | 8000 | API REST do agente (enfileira jobs, SSE) |
+| `agent-worker` | — | Worker LangGraph (fila Redis) |
 | `browser-service` | 3001 | Automação Playwright |
 | `search-service` | 8080 | Busca web SearXNG |
-| `postgres` | 5432 | Estado operacional |
-| `redis` | 6379 | Fila de jobs |
+| `postgres` | — | Estado operacional + checkpoints |
+| `redis` | — | Fila de jobs + eventos |
 | `qdrant` | 6333 | Memória vetorial |
 
 ## Documentação

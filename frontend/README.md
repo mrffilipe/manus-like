@@ -1,29 +1,35 @@
 # Frontend — Manus-like Agent UI
 
-React SPA for submitting agent tasks, monitoring executions, and providing human-in-the-loop input. Built with the same architecture and MUI theme as the Kyvo admin frontend.
+React SPA for the B2B marketing consultant chat: conversations with client context, resource management, human-in-the-loop, live activity timeline, and interactive charts embedded in markdown reports. Built with the Kyvo MUI architecture.
 
 ## Stack
 
 - React 19 + TypeScript 6
 - Vite 8
-- MUI 9 + Emotion
+- MUI 9 + Emotion + `@mui/x-charts`
 - React Router 7 (data mode)
 - Axios
+- `react-markdown` + `remark-gfm`
 
 ## Project structure
 
 ```text
 frontend/src/
-├── config/         # env.ts, axios.ts
-├── contexts/       # ThemeModeContext
-├── theme/          # Kyvo tokens + createAppTheme
+├── config/              # env.ts, axios.ts
+├── contexts/            # ThemeModeContext
+├── theme/               # Kyvo tokens + createAppTheme
+├── hooks/               # useChat, useConversations, useExecutionActivity
 ├── components/
-│   ├── ui/         # Reusable MUI primitives (from Kyvo)
+│   ├── chat/            # ChatThread, ChatComposer, ActivitySummaryBar
+│   ├── activity/        # ActivityTimeline, previews (webpage, search, etc.)
+│   ├── marketing/       # ChartBlock, FunnelChart, KpiStrip, etc.
+│   ├── clients/         # ResourceCard, ResourceTypeBadge
+│   ├── ui/              # MarkdownContent, PageHeader, SectionCard, …
 │   └── AppLayout.tsx
-├── services/       # agentService.ts, httpPaths.ts
+├── services/            # agent, conversation, client, settings
 ├── types/
 ├── utils/
-└── pages/          # HomePage, ExecutionsPage, ExecutionPage
+└── pages/               # ChatPage, ClientsPage, ClientDetailPage, SettingsPage
 ```
 
 ## Scripts
@@ -43,31 +49,45 @@ Copy `.env.example` to `.env`:
 | `VITE_API_BASE_URL` | `http://localhost:8000` | Agent API base URL |
 | `VITE_API_TIMEOUT_MS` | `30000` | Request timeout |
 
-In Docker, `VITE_API_BASE_URL` is passed as a build arg (see root `docker-compose.yml`).
+In Docker, `VITE_API_BASE_URL` is passed as a build arg (see root `docker-compose.yml`). If unset at build time, the app falls back to `window.location.origin`.
 
-## Pages
+## Routes
 
 | Route | Description |
 |-------|-------------|
-| `/` | Dashboard — submit new agent goal |
-| `/executions` | List recent executions (browser localStorage) |
-| `/executions/:id` | Poll status, human input, resume |
+| `/` | New conversation — welcome screen + client selector |
+| `/c/:conversationId` | Existing conversation thread |
+| `/clients` | List and create marketing clients |
+| `/clients/:clientId` | Client profile + resource CRUD |
+| `/settings` | Global marketing consultant persona (system prompt) |
+| `/executions`, `/executions/:id` | Redirect to `/` (legacy routes) |
+
+## Main flows
+
+**Marketing chat:** when a client is selected, `useChat` sends `agent_mode: marketing_consultant` automatically. The thread polls execution status every 2s; `useExecutionActivity` streams activity via SSE (`/agent/events/{id}`) with polling fallback.
+
+**Human-in-the-loop:** when status is `WaitingHumanInput`, the composer accepts a free-text answer or radio options from `pending_options`.
+
+**Markdown reports:** assistant messages render via `MarkdownContent`. Fenced blocks with language `chart` or `kpi` render interactive MUI X charts (`funnel`, `funnel_compare`, `bar_compare`, `projection`, `kpi`).
 
 ## API integration
 
-The UI talks only to `agent-api`:
+The UI talks only to `agent-api` through the `services/` layer:
 
-- `POST /agent/run` — start task
-- `GET /agent/status/{id}` — poll every 2s on execution page
-- `POST /agent/continue/{id}` — submit human answer
-- `POST /agent/resume/{id}` — re-enqueue after interruption
+| Area | Key endpoints |
+|------|---------------|
+| Agent | `POST /agent/run`, `POST /agent/run/upload`, `GET /agent/status/{id}`, `POST /agent/continue/{id}`, `POST /agent/resume/{id}`, `GET /agent/export/{id}/pdf` |
+| Activity | `GET /agent/activity/{id}`, `GET /agent/events/{id}` (SSE) |
+| Conversations | `GET /agent/conversations`, `GET /agent/conversations/{id}/messages`, `DELETE /agent/conversations/{id}` |
+| Clients | `GET/POST/PATCH/DELETE /agent/clients`, resources CRUD + upload + refresh |
+| Settings | `GET/PATCH /agent/settings`, `POST /agent/settings/reset` |
 
 ## Architecture patterns (from Kyvo)
 
 - **No custom CSS** — MUI `sx` and theme overrides only
-- **Service layer** — Axios calls in `services/`, pages fetch via `useEffect`
+- **Service layer** — Axios calls in `services/`; hooks orchestrate state
 - **UI primitives** — `PageHeader`, `SectionCard`, `DataTable`, `StatusChip`, etc.
-- **Theme** — light/dark via `ThemeModeContext`, Kyvo indigo/violet palette
+- **Theme** — light/dark via `ThemeModeContext`, Kyvo indigo/violet palette, pt-BR locale
 
 ## Docker
 
@@ -76,3 +96,5 @@ docker build -t manus-frontend ./frontend
 ```
 
 Or use root `docker compose up --build` to start with the full stack.
+
+See [specs.md](../specs.md) for the full system design.

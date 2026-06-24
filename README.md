@@ -1,6 +1,6 @@
 # Manus-like Autonomous Agent System
 
-Monorepo for a containerized autonomous agent with a React admin UI and Python backend services.
+Monorepo for a containerized autonomous agent with a React chat UI and Python backend services. The primary product flow is a **B2B marketing consultant**: chat with client context, structured intake, domain tools, and interactive charts embedded in markdown reports.
 
 ## Repository layout
 
@@ -42,12 +42,13 @@ docker compose up --build
 
 | Service | Port | Description |
 |---------|------|-------------|
-| `frontend` | 3000 | React UI |
-| `agent-api` | 8000 | Agent REST API |
+| `frontend` | 3000 | React chat UI (clients, settings, markdown charts) |
+| `agent-api` | 8000 | Agent REST API (enqueues jobs, SSE) |
+| `agent-worker` | — | LangGraph worker (Redis queue) |
 | `browser-service` | 3001 | Playwright automation |
 | `search-service` | 8080 | SearXNG web search |
-| `postgres` | 5432 | Operational state |
-| `redis` | 6379 | Job queue |
+| `postgres` | — | Operational state + checkpoints |
+| `redis` | — | Job queue + event bus |
 | `qdrant` | 6333 | Vector memory |
 
 ## Documentation
